@@ -6,11 +6,31 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"time"
 
+	"sync"
+
+	"github.com/forward-mcp/internal/forward"
 	"github.com/forward-mcp/internal/logger"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/mattn/go-sqlite3"
 )
+
+var registerSQLiteWithFKOnce sync.Once
+
+// openSQLiteWithForeignKeys opens a SQLite DB with foreign key support enabled on every connection
+func openSQLiteWithForeignKeys(dbPath string) (*sql.DB, error) {
+	driverName := "sqlite3_with_fk"
+	registerSQLiteWithFKOnce.Do(func() {
+		sql.Register(driverName, &sqlite3.SQLiteDriver{
+			ConnectHook: func(conn *sqlite3.SQLiteConn) error {
+				_, err := conn.Exec("PRAGMA foreign_keys = ON;", nil)
+				return err
+			},
+		})
+	})
+	return sql.Open(driverName, dbPath)
+}
 
 // Entity represents a node in the knowledge graph
 type Entity struct {
@@ -64,7 +84,8 @@ func NewMemorySystem(logger *logger.Logger, instanceID string) (*MemorySystem, e
 	}
 
 	dbPath := filepath.Join(dataDir, "memory.db")
-	db, err := sql.Open("sqlite3", dbPath)
+	// db, err := sql.Open("sqlite3", dbPath)
+	db, err := openSQLiteWithForeignKeys(dbPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to open memory database: %w", err)
 	}
@@ -638,4 +659,87 @@ func (m *MemorySystem) scanObservation(rows *sql.Rows) (*Observation, error) {
 	}
 
 	return &observation, nil
+}
+
+// StoreNQEResultWithChunking stores a large NQE result in chunked observations for LLM-friendly retrieval
+func (m *MemorySystem) StoreNQEResultWithChunking(queryID, networkID, snapshotID string, result *forward.NQERunResult, chunkSize int) (string, error) {
+	if chunkSize <= 0 {
+		chunkSize = 200 // Default chunk size if not specified
+	}
+	// 1. Create result entity
+	entity, err := m.CreateEntity(
+		fmt.Sprintf("%s-%s-%s", queryID, networkID, snapshotID),
+		"nqe_result",
+		map[string]interface{}{
+			"query_id": queryID, "network_id": networkID, "snapshot_id": snapshotID,
+			"row_count": len(result.Items),
+		},
+	)
+	if err != nil {
+		return "", err
+	}
+
+	totalRows := len(result.Items)
+	totalChunks := (totalRows + chunkSize - 1) / chunkSize
+	for i := 0; i < totalChunks; i++ {
+		start := i * chunkSize
+		end := start + chunkSize
+		if end > totalRows {
+			end = totalRows
+		}
+		chunk := result.Items[start:end]
+		chunkJSON, _ := json.Marshal(chunk)
+		_, err := m.AddObservation(
+			entity.ID,
+			string(chunkJSON),
+			"nqe_result_chunk",
+			map[string]interface{}{
+				"chunk_index":  i,
+				"total_chunks": totalChunks,
+				"row_range":    []int{start, end - 1},
+			},
+		)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	// Add a summary observation for LLMs and metadata
+	var columns []string
+	if len(result.Items) > 0 {
+		for k := range result.Items[0] {
+			columns = append(columns, k)
+		}
+	}
+	summary := map[string]interface{}{
+		"columns":      columns,
+		"row_count":    totalRows,
+		"total_chunks": totalChunks,
+		"query_id":     queryID,
+		"network_id":   networkID,
+		"snapshot_id":  snapshotID,
+	}
+	summaryJSON, _ := json.Marshal(summary)
+	_, _ = m.AddObservation(entity.ID, string(summaryJSON), "nqe_result_summary", nil)
+
+	return entity.ID, nil
+}
+
+// GetNQEResultChunks retrieves all chunk observations for a result entity, ordered by chunk_index
+func (m *MemorySystem) GetNQEResultChunks(resultEntityID string) ([]string, error) {
+	obs, err := m.GetObservations(resultEntityID, "nqe_result_chunk")
+	if err != nil {
+		return nil, err
+	}
+	// Sort by chunk_index in metadata
+	sort.Slice(obs, func(i, j int) bool {
+		ci, _ := obs[i].Metadata["chunk_index"].(float64)
+		cj, _ := obs[j].Metadata["chunk_index"].(float64)
+		return ci < cj
+	})
+	chunks := make([]string, len(obs))
+	for i, o := range obs {
+		chunks[i] = o.Content
+	}
+	return chunks, nil
 }

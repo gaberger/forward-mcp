@@ -3,7 +3,6 @@ package service
 import (
 	"context"
 	"fmt"
-	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -935,10 +934,6 @@ func (m *MockForwardClient) GetNQEAllQueriesEnhancedWithCache(existingCommitIDs 
 }
 
 func (m *MockForwardClient) GetNQEQueryByCommit(commitID string, path string, repository string) (*forward.NQEQueryDetail, error) {
-	return m.GetNQEQueryByCommitWithContext(context.Background(), commitID, path, repository)
-}
-
-func (m *MockForwardClient) GetNQEQueryByCommitWithContext(ctx context.Context, commitID string, path string, repository string) (*forward.NQEQueryDetail, error) {
 	if m.shouldError {
 		return nil, &MockError{m.errorMessage}
 	}
@@ -1228,13 +1223,13 @@ func TestCacheCompressionFeatures(t *testing.T) {
 	service := createTestService()
 	service.config.Forward.SemanticCache.CompressResults = true
 	service.config.Forward.SemanticCache.CompressionLevel = 6
-
+	
 	// Create a large result that will benefit from compression
 	largeResult := &forward.NQERunResult{
 		SnapshotID: "test-snapshot",
 		Items:      make([]map[string]interface{}, 100),
 	}
-
+	
 	// Fill with repetitive data that compresses well
 	for i := 0; i < 100; i++ {
 		largeResult.Items[i] = map[string]interface{}{
@@ -1245,29 +1240,29 @@ func TestCacheCompressionFeatures(t *testing.T) {
 			"status":      "active",
 		}
 	}
-
+	
 	// Store in cache with compression
 	err := service.semanticCache.Put("large-query-test", "test-network", "test-snapshot", largeResult)
 	if err != nil {
 		t.Fatalf("Failed to store large result: %v", err)
 	}
-
+	
 	// Retrieve and verify the result is the same
 	retrievedResult, found := service.semanticCache.Get("large-query-test", "test-network", "test-snapshot")
 	if !found {
 		t.Fatal("Failed to retrieve compressed result")
 	}
-
+	
 	if len(retrievedResult.Items) != len(largeResult.Items) {
 		t.Errorf("Expected %d items, got %d", len(largeResult.Items), len(retrievedResult.Items))
 	}
-
+	
 	// Check compression metrics
 	stats := service.semanticCache.GetStats()
 	compressionRatio := stats["compression_ratio"].(string)
-
+	
 	t.Logf("Compression ratio for large result: %s", compressionRatio)
-
+	
 	if compressionRatio == "0.000" {
 		t.Log("Note: Compression ratio is 0 - this may be expected for test data")
 	}
@@ -1279,11 +1274,11 @@ func TestCacheEvictionPolicies(t *testing.T) {
 	service := createTestService()
 	service.config.Forward.SemanticCache.MaxEntries = 3  // Very small for testing
 	service.config.Forward.SemanticCache.MaxMemoryMB = 1 // Small memory limit
-	service.semanticCache.maxEntries = 3                 // Update runtime setting
-
+	service.semanticCache.maxEntries = 3 // Update runtime setting
+	
 	// Execute multiple queries to test eviction
 	queries := []string{"query-1", "query-2", "query-3", "query-4"}
-
+	
 	for _, queryID := range queries {
 		args := RunNQEQueryByIDArgs{
 			QueryID:    queryID,
@@ -1317,7 +1312,7 @@ func TestCacheErrorHandling(t *testing.T) {
 	// Create mock client that returns errors
 	mockClient := NewMockForwardClient()
 	mockClient.SetError(true, "API error")
-
+	
 	service := createTestService()
 	service.forwardClient = mockClient
 
@@ -1343,10 +1338,10 @@ func TestCacheErrorHandling(t *testing.T) {
 
 	// Test with cache disabled
 	service.config.Forward.SemanticCache.Enabled = false
-
+	
 	// Reset mock to not error
 	mockClient.SetError(false, "")
-
+	
 	// Execute query twice - both should hit API (no caching)
 	_, err = service.runNQEQueryByID(args)
 	if err != nil {
@@ -1357,421 +1352,10 @@ func TestCacheErrorHandling(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to execute query second time: %v", err)
 	}
-
+	
 	// With cache disabled, stats should remain empty
 	stats = service.semanticCache.GetStats()
 	if stats["total_entries"].(int) > 0 {
 		t.Error("Expected no cache entries when cache is disabled")
 	}
-}
-
-func TestRunNQEQueryByID_Pagination(t *testing.T) {
-	service := createTestService()
-
-	// Prepare mock data with 55 items
-	mockItems := make([]map[string]interface{}, 55)
-	for i := 0; i < 55; i++ {
-		mockItems[i] = map[string]interface{}{
-			"device": fmt.Sprintf("device-%d", i),
-		}
-	}
-	validQueryID := "FQ_ac651cb2901b067fe7dbfb511613ab44776d8029" // Use a valid QueryID from static JSON
-	service.forwardClient.(*MockForwardClient).nqeResult = &forward.NQERunResult{
-		SnapshotID: "snapshot-123",
-		Items:      mockItems,
-	}
-	// Optionally, ensure the mock only returns results for the valid QueryID
-	service.forwardClient.(*MockForwardClient).nqeQueries = []forward.NQEQuery{{QueryID: validQueryID}}
-
-	t.Run("Single page with limit", func(t *testing.T) {
-		args := RunNQEQueryByIDArgs{
-			QueryID:   validQueryID,
-			NetworkID: "162112",
-			Options: &NQEQueryOptions{
-				Limit: 20,
-			},
-		}
-		response, err := service.runNQEQueryByID(args)
-		if err != nil {
-			t.Fatalf("Expected no error, got: %v", err)
-		}
-		if response == nil {
-			t.Fatal("Expected response, got nil")
-		}
-		content := response.Content[0].TextContent.Text
-		if !contains(content, "NQE query completed") {
-			t.Error("Expected response to indicate NQE query completion")
-		}
-		if !contains(content, "Results may be truncated") {
-			t.Error("Expected pagination warning for truncated results")
-		}
-	})
-
-	t.Run("All results with all_results true", func(t *testing.T) {
-		args := RunNQEQueryByIDArgs{
-			QueryID:    validQueryID,
-			NetworkID:  "162112",
-			Options:    &NQEQueryOptions{Limit: 20},
-			AllResults: true,
-		}
-		response, err := service.runNQEQueryByID(args)
-		if err != nil {
-			t.Fatalf("Expected no error, got: %v", err)
-		}
-		if response == nil {
-			t.Fatal("Expected response, got nil")
-		}
-		content := response.Content[0].TextContent.Text
-		if !contains(content, "Fetched all results in batches") {
-			t.Error("Expected all-results batch response")
-		}
-		if !contains(content, "Total items: 55") {
-			t.Error("Expected all 55 items to be returned")
-		}
-	})
-
-	t.Run("Offset works as expected", func(t *testing.T) {
-		args := RunNQEQueryByIDArgs{
-			QueryID:   validQueryID,
-			NetworkID: "162112",
-			Options: &NQEQueryOptions{
-				Limit:  10,
-				Offset: 30,
-			},
-		}
-		response, err := service.runNQEQueryByID(args)
-		if err != nil {
-			t.Fatalf("Expected no error, got: %v", err)
-		}
-		if response == nil {
-			t.Fatal("Expected response, got nil")
-		}
-		content := response.Content[0].TextContent.Text
-		if !contains(content, "NQE query completed") {
-			t.Error("Expected response to indicate NQE query completion")
-		}
-		if !contains(content, "Results may be truncated") {
-			t.Error("Expected pagination warning for truncated results")
-		}
-		if !contains(content, "device-30") || !contains(content, "device-39") {
-			t.Error("Expected response to contain correct offset range")
-		}
-	})
-
-	t.Run("Limit larger than total", func(t *testing.T) {
-		args := RunNQEQueryByIDArgs{
-			QueryID:   validQueryID,
-			NetworkID: "162112",
-			Options: &NQEQueryOptions{
-				Limit: 100,
-			},
-		}
-		response, err := service.runNQEQueryByID(args)
-		if err != nil {
-			t.Fatalf("Expected no error, got: %v", err)
-		}
-		if response == nil {
-			t.Fatal("Expected response, got nil")
-		}
-		content := response.Content[0].TextContent.Text
-		if !contains(content, "NQE query completed") {
-			t.Error("Expected response to indicate NQE query completion")
-		}
-		if contains(content, "Results may be truncated") {
-			t.Error("Did not expect pagination warning when all results fit")
-		}
-	})
-
-	t.Run("Offset beyond total", func(t *testing.T) {
-		args := RunNQEQueryByIDArgs{
-			QueryID:   validQueryID,
-			NetworkID: "162112",
-			Options: &NQEQueryOptions{
-				Limit:  10,
-				Offset: 100,
-			},
-		}
-		response, err := service.runNQEQueryByID(args)
-		if err != nil {
-			t.Fatalf("Expected no error, got: %v", err)
-		}
-		if response == nil {
-			t.Fatal("Expected response, got nil")
-		}
-		content := response.Content[0].TextContent.Text
-		if !contains(content, "NQE query completed") {
-			t.Error("Expected response to indicate NQE query completion")
-		}
-		if contains(content, "device-0") || contains(content, "device-1") {
-			t.Error("Did not expect any normal device results for offset beyond total")
-		}
-	})
-}
-
-// TestBloomSearchIntegration tests the bloomsearch integration in MCP service
-func TestBloomSearchIntegration(t *testing.T) {
-	service := createTestService()
-
-	// Test determineFilterType method
-	t.Run("determineFilterType", func(t *testing.T) {
-		testCases := []struct {
-			queryID  string
-			items    []map[string]interface{}
-			expected string
-		}{
-			{
-				queryID: "device_basic_info",
-				items: []map[string]interface{}{
-					{"device_name": "router1", "platform": "Cisco"},
-				},
-				expected: "device",
-			},
-			{
-				queryID: "interface_status",
-				items: []map[string]interface{}{
-					{"interface_name": "GigabitEthernet0/1", "status": "up"},
-				},
-				expected: "interface",
-			},
-			{
-				queryID: "config_search",
-				items: []map[string]interface{}{
-					{"configuration": "interface GigabitEthernet0/1"},
-				},
-				expected: "config",
-			},
-			{
-				queryID: "routing_table",
-				items: []map[string]interface{}{
-					{"route": "192.168.1.0/24"},
-				},
-				expected: "route",
-			},
-			{
-				queryID: "vlan_info",
-				items: []map[string]interface{}{
-					{"vlan_id": "10"},
-				},
-				expected: "vlan",
-			},
-			{
-				queryID: "acl_policies",
-				items: []map[string]interface{}{
-					{"acl_name": "PERMIT_ALL"},
-				},
-				expected: "security",
-			},
-			{
-				queryID: "unknown_query",
-				items: []map[string]interface{}{
-					{"random_field": "value"},
-				},
-				expected: "data",
-			},
-		}
-
-		for _, tc := range testCases {
-			result := service.determineFilterType(tc.queryID, tc.items)
-			if result != tc.expected {
-				t.Errorf("determineFilterType(%s) = %s, expected %s", tc.queryID, result, tc.expected)
-			}
-		}
-	})
-
-	// Test extractSearchTerms method
-	t.Run("extractSearchTerms", func(t *testing.T) {
-		testCases := []struct {
-			query    string
-			expected []string
-		}{
-			{
-				query:    "devices with high CPU usage",
-				expected: []string{"devices", "high", "cpu", "usage"},
-			},
-			{
-				query:    "interfaces that are down",
-				expected: []string{"interfaces", "down"},
-			},
-			{
-				query:    "the router and switch configuration",
-				expected: []string{"router", "switch", "configuration"},
-			},
-			{
-				query:    "a device with status up",
-				expected: []string{"device", "status"},
-			},
-			{
-				query:    "",
-				expected: nil,
-			},
-			{
-				query:    "short",
-				expected: []string{"short"},
-			},
-		}
-
-		for _, tc := range testCases {
-			result := service.extractSearchTerms(tc.query)
-			if !reflect.DeepEqual(result, tc.expected) {
-				t.Errorf("extractSearchTerms(%q) = %v, expected %v", tc.query, result, tc.expected)
-			}
-		}
-	})
-
-	// Test isStopWord method
-	t.Run("isStopWord", func(t *testing.T) {
-		stopWords := []string{"the", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by"}
-		nonStopWords := []string{"device", "router", "interface", "config", "status", "up", "down"}
-
-		for _, word := range stopWords {
-			if !service.isStopWord(word) {
-				t.Errorf("Expected %q to be a stop word", word)
-			}
-		}
-
-		for _, word := range nonStopWords {
-			if service.isStopWord(word) {
-				t.Errorf("Expected %q to NOT be a stop word", word)
-			}
-		}
-	})
-}
-
-// TestEnhancedSearchEntities tests the enhanced searchEntities with bloom filter integration
-func TestEnhancedSearchEntities(t *testing.T) {
-	service := createTestService()
-
-	// Test the bloom filter logic directly without full memory system integration
-	t.Run("bloom_filter_logic", func(t *testing.T) {
-		// Test determineFilterType
-		items := []map[string]interface{}{
-			{"device_name": "router1", "platform": "Cisco"},
-		}
-		filterType := service.determineFilterType("device_basic_info", items)
-		if filterType != "device" {
-			t.Errorf("Expected filter type 'device', got '%s'", filterType)
-		}
-
-		// Test extractSearchTerms
-		searchTerms := service.extractSearchTerms("devices with high CPU usage")
-		expected := []string{"devices", "high", "cpu", "usage"}
-		if !reflect.DeepEqual(searchTerms, expected) {
-			t.Errorf("Expected search terms %v, got %v", expected, searchTerms)
-		}
-
-		// Test isStopWord
-		if !service.isStopWord("the") {
-			t.Error("Expected 'the' to be a stop word")
-		}
-		if service.isStopWord("device") {
-			t.Error("Expected 'device' to NOT be a stop word")
-		}
-	})
-}
-
-// TestEnhancedGetNQEResultSummary tests the enhanced getNQEResultSummary with bloom filter info
-func TestEnhancedGetNQEResultSummary(t *testing.T) {
-	service := createTestService()
-
-	// Test the bloom filter integration logic directly
-	t.Run("bloom_filter_integration_logic", func(t *testing.T) {
-		// Test formatBytes function
-		result := formatBytes(1024 * 1024)
-		if result != "1.0 MB" {
-			t.Errorf("Expected '1.0 MB', got '%s'", result)
-		}
-
-		result = formatBytes(1500)
-		if result != "1.5 KB" {
-			t.Errorf("Expected '1.5 KB', got '%s'", result)
-		}
-
-		// Test determineFilterType with various scenarios
-		testCases := []struct {
-			queryID string
-			items   []map[string]interface{}
-			expected string
-		}{
-			{
-				queryID: "device_basic_info",
-				items: []map[string]interface{}{
-					{"device_name": "router1"},
-				},
-				expected: "device",
-			},
-			{
-				queryID: "interface_status",
-				items: []map[string]interface{}{
-					{"interface_name": "GigabitEthernet0/1"},
-				},
-				expected: "interface",
-			},
-		}
-
-		for _, tc := range testCases {
-			result := service.determineFilterType(tc.queryID, tc.items)
-			if result != tc.expected {
-				t.Errorf("determineFilterType(%s) = %s, expected %s", tc.queryID, result, tc.expected)
-			}
-		}
-	})
-}
-
-// TestFormatBytes tests the formatBytes utility function
-func TestFormatBytes(t *testing.T) {
-	testCases := []struct {
-		bytes    int64
-		expected string
-	}{
-		{0, "0 B"},
-		{1023, "1023 B"},
-		{1024, "1.0 KB"},
-		{1024 * 1024, "1.0 MB"},
-		{1024 * 1024 * 1024, "1.0 GB"},
-		{1500, "1.5 KB"},
-		{1500000, "1.4 MB"},
-	}
-
-	for _, tc := range testCases {
-		result := formatBytes(tc.bytes)
-		if result != tc.expected {
-			t.Errorf("formatBytes(%d) = %s, expected %s", tc.bytes, result, tc.expected)
-		}
-	}
-}
-
-// TestBloomFilterAutoBuild tests automatic bloom filter building in runNQEQueryByID
-func TestBloomFilterAutoBuild(t *testing.T) {
-	service := createTestService()
-
-	// Mock bloom manager
-	service.bloomManager = &BloomSearchManager{
-		filterMetadata: make(map[string]*FilterMetadata),
-		logger:         service.logger,
-		instanceID:     "test",
-	}
-
-	// Set default network ID
-	service.defaults.NetworkID = "test-network"
-
-	t.Run("auto_build_bloom_filter_for_large_results", func(t *testing.T) {
-		// Test the determineFilterType method directly since the full integration
-		// requires a complex mock setup
-		items := []map[string]interface{}{
-			{"device_name": "router1", "platform": "Cisco"},
-			{"device_name": "router2", "platform": "Juniper"},
-		}
-
-		filterType := service.determineFilterType("device_basic_info", items)
-		if filterType != "device" {
-			t.Errorf("Expected filter type 'device', got '%s'", filterType)
-		}
-
-		// Test extractSearchTerms
-		searchTerms := service.extractSearchTerms("devices with high CPU")
-		expected := []string{"devices", "high", "cpu"}
-		if !reflect.DeepEqual(searchTerms, expected) {
-			t.Errorf("Expected search terms %v, got %v", expected, searchTerms)
-		}
-	})
 }

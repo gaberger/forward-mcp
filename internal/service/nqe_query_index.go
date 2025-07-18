@@ -19,7 +19,6 @@ type NQEQueryIndexEntry struct {
 	QueryID     string    `json:"queryId"`
 	Path        string    `json:"path"`
 	Intent      string    `json:"intent"`
-	Description string    `json:"description"` // Add this field for extracted @description
 	Code        string    `json:"code"`
 	Category    string    `json:"category"`
 	Subcategory string    `json:"subcategory"`
@@ -137,7 +136,7 @@ func (idx *NQEQueryIndex) LoadFromSpec() error {
 		return fmt.Errorf("no queries found in spec file")
 	}
 
-	filtered := make([]*NQEQueryIndexEntry, 0, len(nqeLibrary.Queries))
+	// Parse path into category, subcategory, and intent for each query
 	for _, query := range nqeLibrary.Queries {
 		segments := strings.Split(strings.Trim(query.Path, "/"), "/")
 		if len(segments) > 0 {
@@ -149,23 +148,10 @@ func (idx *NQEQueryIndex) LoadFromSpec() error {
 		if len(segments) > 0 {
 			query.Intent = segments[len(segments)-1]
 		}
-		// Tightened filter: Require BOTH intent and description to be non-empty and >=10 chars
-		intent := strings.TrimSpace(query.Intent)
-		desc := strings.TrimSpace(query.Description)
-		if len(intent) < 10 || len(desc) < 10 {
-			continue
-		}
-		// Exclude generic/test names
-		lowerIntent := strings.ToLower(intent)
-		if lowerIntent == "test" || lowerIntent == "example" || lowerIntent == "demo" ||
-			strings.Contains(lowerIntent, "test") || strings.Contains(lowerIntent, "example") {
-			continue
-		}
-		filtered = append(filtered, query)
 	}
 
-	idx.queries = filtered
-	idx.logger.Info("Loaded %d NQE queries into search index (filtered for strong metadata)", len(filtered))
+	idx.queries = nqeLibrary.Queries
+	idx.logger.Info("Loaded %d NQE queries into search index", len(nqeLibrary.Queries))
 
 	// Try to load pre-generated embeddings
 	if err := idx.loadEmbeddingsFromCache(); err != nil {
@@ -195,14 +181,15 @@ func (idx *NQEQueryIndex) LoadFromQueries(queries []forward.NQEQueryDetail) erro
 		idx.isReady = true
 	}()
 
-	var strongMeta, weakMeta []*NQEQueryIndexEntry
+	// Convert NQEQueryDetail to NQEQueryIndexEntry
+	idx.queries = make([]*NQEQueryIndexEntry, 0, len(queries))
+
 	for _, query := range queries {
+		// Parse path into category, subcategory, and intent
 		segments := strings.Split(strings.Trim(query.Path, "/"), "/")
 		category := ""
 		subcategory := ""
-		intent := strings.TrimSpace(query.Intent)
-		desc := strings.TrimSpace(query.Description)
-		path := query.Path
+		intent := ""
 
 		if len(segments) > 0 {
 			category = segments[0]
@@ -210,50 +197,25 @@ func (idx *NQEQueryIndex) LoadFromQueries(queries []forward.NQEQueryDetail) erro
 		if len(segments) > 1 {
 			subcategory = segments[1]
 		}
-
-		// Prioritize embedding text: Intent+Description > Intent > Description > Path
-		embeddingText := ""
-		switch {
-		case intent != "" && desc != "":
-			embeddingText = intent + " | " + desc
-			idx.logger.Debug("Embedding for %s: using Intent+Description", query.QueryID)
-		case intent != "":
-			embeddingText = intent
-			idx.logger.Debug("Embedding for %s: using Intent only", query.QueryID)
-		case desc != "":
-			embeddingText = desc
-			idx.logger.Debug("Embedding for %s: using Description only", query.QueryID)
-		default:
-			embeddingText = path
-			idx.logger.Debug("Embedding for %s: using Path only", query.QueryID)
+		if len(segments) > 0 {
+			intent = segments[len(segments)-1]
 		}
 
 		entry := &NQEQueryIndexEntry{
 			QueryID:     query.QueryID,
 			Path:        query.Path,
 			Intent:      intent,
-			Description: desc,
 			Code:        query.SourceCode,
 			Category:    category,
 			Subcategory: subcategory,
-			Repository:  query.Repository,
+			Repository:  query.Repository, // Use the actual repository from API
 			LastUpdated: time.Now(),
 		}
-		// Store the embedding text for later use (e.g., in embedding generation)
-		entry.Code = embeddingText // Overload Code field for embedding text, or add a new field if preferred
 
-		// Prioritization for search order (strong metadata first)
-		isStrong := intent != "" && desc != "" && len(intent) >= 10 && len(desc) >= 10
-		if isStrong {
-			strongMeta = append(strongMeta, entry)
-		} else {
-			weakMeta = append(weakMeta, entry)
-		}
+		idx.queries = append(idx.queries, entry)
 	}
-	// Prioritize strong metadata queries by putting them first
-	filtered := append(strongMeta, weakMeta...)
-	idx.queries = filtered
-	idx.logger.Info("Loaded %d NQE queries into search index from database (%d prioritized for strong metadata)", len(filtered), len(strongMeta))
+
+	idx.logger.Info("Loaded %d NQE queries into search index from database", len(idx.queries))
 
 	// Skip loading old embeddings cache - we're using database data now
 	// Embeddings can be generated on-demand if needed for semantic search
@@ -273,7 +235,6 @@ func (idx *NQEQueryIndex) LoadFromMockData() error {
 			QueryID:     "FQ_ac651cb2901b067fe7dbfb511613ab44776d8029",
 			Path:        "/L3/Basic/All Devices",
 			Intent:      "List all devices in the network",
-			Description: "This query retrieves a list of all devices connected to the network, including their names and platforms.",
 			Code:        "SELECT device_name, platform FROM devices",
 			Category:    "L3",
 			Subcategory: "Basic",
@@ -284,7 +245,6 @@ func (idx *NQEQueryIndex) LoadFromMockData() error {
 			QueryID:     "FQ_test_hardware_query",
 			Path:        "/Hardware/Basic/Device Hardware",
 			Intent:      "Show device hardware information",
-			Description: "This query displays detailed hardware information for a specific device, including its name, model, and serial number.",
 			Code:        "SELECT device_name, model, serial_number FROM device_hardware",
 			Category:    "Hardware",
 			Subcategory: "Basic",
@@ -295,7 +255,6 @@ func (idx *NQEQueryIndex) LoadFromMockData() error {
 			QueryID:     "FQ_test_security_query",
 			Path:        "/Security/Basic/ACL Analysis",
 			Intent:      "Analyze access control lists",
-			Description: "This query analyzes access control lists (ACLs) across the network to identify potential security vulnerabilities and misconfigurations.",
 			Code:        "SELECT device_name, acl_name, rule_count FROM acls",
 			Category:    "Security",
 			Subcategory: "Basic",
@@ -381,15 +340,11 @@ func (idx *NQEQueryIndex) GenerateEmbeddings() error {
 			continue
 		}
 
-		// Use the prioritized embedding text we stored in entry.Code
-		searchText := query.Code
-		if searchText == "" {
-			// Fallback to old logic if Code is empty
-			searchText = fmt.Sprintf(
-				"Query Path: %s\nCategory: %s\nSubcategory: %s\nIntent: %s\nDescription: %s",
-				query.Path, query.Category, query.Subcategory, query.Intent, query.Description,
-			)
-		}
+		// Use all parsed fields for richer context
+		searchText := fmt.Sprintf(
+			"Query Path: %s\nCategory: %s\nSubcategory: %s\nIntent: %s",
+			query.Path, query.Category, query.Subcategory, query.Intent,
+		)
 
 		embedding, err := idx.embeddingService.GenerateEmbedding(searchText)
 		if err != nil {
@@ -472,81 +427,89 @@ func (idx *NQEQueryIndex) SearchQueries(searchText string, limit int) ([]*QueryS
 		}
 	}
 
-	// Always use embedding-based search if any queries have embeddings
-	if embeddedCount > 0 {
-		searchEmbedding64, err := idx.embeddingService.GenerateEmbedding(searchText)
-		if err != nil {
-			idx.logger.Debug("Failed to generate search embedding, falling back to keyword search: %v", err)
-			return idx.searchWithKeywords(searchText, limit)
-		}
+	// For offline mode or when OpenAI is not available, use cached embeddings with keyword fallback
+	var searchEmbedding []float32
 
-		searchEmbedding := make([]float32, len(searchEmbedding64))
-		for i, v := range searchEmbedding64 {
-			searchEmbedding[i] = float32(v)
-		}
+	// Check if we should use keyword-based search directly
+	_, isMock := idx.embeddingService.(*MockEmbeddingService)
+	_, isKeyword := idx.embeddingService.(*KeywordEmbeddingService)
 
-		var results []*QuerySearchResult
-
-		for _, query := range idx.queries {
-			if len(query.Embedding) == 0 {
-				continue // Only use queries with embeddings
-			}
-			// Remove metadata filtering - include all queries with embeddings
-			similarity := calculateCosineSimilarity(searchEmbedding, query.Embedding)
-
-			// NEW: Boost foundational data queries for counting searches
-			if idx.isFoundationalDataQuery(query, strings.Fields(strings.ToLower(searchText))) {
-				similarity *= 1.5 // Boost by 50% for foundational queries
-				idx.logger.Debug("Boosted semantic similarity for foundational query %s: %.4f -> %.4f",
-					query.QueryID, similarity/1.5, similarity)
-			}
-
-			if similarity > 0.01 {
-				result := &QuerySearchResult{
-					NQEQueryIndexEntry: query,
-					SimilarityScore:    similarity,
-					MatchType:          "semantic",
-				}
-				results = append(results, result)
-			}
-		}
-
-		for i := 0; i < len(results); i++ {
-			for j := i + 1; j < len(results); j++ {
-				if results[i].SimilarityScore < results[j].SimilarityScore {
-					results[i], results[j] = results[j], results[i]
-				}
-			}
-		}
-
-		maxDebug := 10
-		if len(results) < maxDebug {
-			maxDebug = len(results)
-		}
-		idx.logger.Debug("Top %d semantic matches for search '%s':", maxDebug, searchText)
-		for i := 0; i < maxDebug; i++ {
-			q := results[i]
-			idx.logger.Debug("  [%d] QueryID: %s | Path: %s | Intent: %s | Similarity: %.4f", i+1, q.QueryID, q.Path, q.Intent, q.SimilarityScore)
-		}
-
-		if limit > 0 && len(results) > limit {
-			results = results[:limit]
-		}
-
-		return results, nil
+	if isMock || isKeyword || embeddedCount == 0 {
+		// Use keyword-based matching for better accuracy with these services
+		idx.logger.Debug("Using keyword-based search (service type: %T)", idx.embeddingService)
+		return idx.searchWithKeywords(searchText, limit)
 	}
 
-	// Only fall back to keyword-based search if no queries have embeddings
-	return idx.searchWithKeywords(searchText, limit)
+	// Try to generate embedding for search text
+	searchEmbedding64, err := idx.embeddingService.GenerateEmbedding(searchText)
+	if err != nil {
+		idx.logger.Debug("Failed to generate search embedding, falling back to keyword search: %v", err)
+		return idx.searchWithKeywords(searchText, limit)
+	}
+
+	// Convert to float32
+	searchEmbedding = make([]float32, len(searchEmbedding64))
+	for i, v := range searchEmbedding64 {
+		searchEmbedding[i] = float32(v)
+	}
+
+	var results []*QuerySearchResult
+
+	// Calculate similarity scores using cached embeddings
+	for _, query := range idx.queries {
+		if len(query.Embedding) == 0 {
+			continue
+		}
+
+		similarity := calculateCosineSimilarity(searchEmbedding, query.Embedding)
+
+		// Lower threshold to be more lenient (was 0.05)
+		if similarity > 0.01 {
+			result := &QuerySearchResult{
+				NQEQueryIndexEntry: query,
+				SimilarityScore:    similarity,
+				MatchType:          "semantic",
+			}
+			results = append(results, result)
+		}
+	}
+
+	// Sort by similarity score (highest first)
+	for i := 0; i < len(results); i++ {
+		for j := i + 1; j < len(results); j++ {
+			if results[i].SimilarityScore < results[j].SimilarityScore {
+				results[i], results[j] = results[j], results[i]
+			}
+		}
+	}
+
+	// Debug printout: log the top 10 matches
+	maxDebug := 10
+	if len(results) < maxDebug {
+		maxDebug = len(results)
+	}
+	idx.logger.Debug("Top %d semantic matches for search '%s':", maxDebug, searchText)
+	for i := 0; i < maxDebug; i++ {
+		q := results[i]
+		idx.logger.Debug("  [%d] QueryID: %s | Path: %s | Intent: %s | Similarity: %.4f", i+1, q.QueryID, q.Path, q.Intent, q.SimilarityScore)
+	}
+
+	// Apply limit
+	if limit > 0 && len(results) > limit {
+		results = results[:limit]
+	}
+
+	return results, nil
 }
 
+// searchWithKeywords provides keyword-based search as fallback when embeddings are not available
 func (idx *NQEQueryIndex) searchWithKeywords(searchText string, limit int) ([]*QuerySearchResult, error) {
 	searchTerms := strings.Fields(strings.ToLower(searchText))
 	var results []*QuerySearchResult
 
 	for _, query := range idx.queries {
-		// Remove metadata filtering - include all queries in keyword search
 		score := idx.calculateKeywordScore(query, searchTerms)
+
 		if score > 0 {
 			result := &QuerySearchResult{
 				NQEQueryIndexEntry: query,
@@ -557,6 +520,7 @@ func (idx *NQEQueryIndex) searchWithKeywords(searchText string, limit int) ([]*Q
 		}
 	}
 
+	// Sort by keyword score (highest first)
 	for i := 0; i < len(results); i++ {
 		for j := i + 1; j < len(results); j++ {
 			if results[i].SimilarityScore < results[j].SimilarityScore {
@@ -565,6 +529,7 @@ func (idx *NQEQueryIndex) searchWithKeywords(searchText string, limit int) ([]*Q
 		}
 	}
 
+	// Apply limit
 	if limit > 0 && len(results) > limit {
 		results = results[:limit]
 	}
@@ -574,11 +539,9 @@ func (idx *NQEQueryIndex) searchWithKeywords(searchText string, limit int) ([]*Q
 
 // calculateKeywordScore calculates a keyword-based similarity score
 func (idx *NQEQueryIndex) calculateKeywordScore(query *NQEQueryIndexEntry, searchTerms []string) float64 {
-	// Include intent and description as primary fields for matching
-	searchableText := strings.ToLower(fmt.Sprintf("%s %s %s %s %s %s %s",
+	searchableText := strings.ToLower(fmt.Sprintf("%s %s %s %s %s %s",
 		query.Path,
 		query.Intent,
-		query.Description, // Use extracted @description
 		query.Category,
 		query.Subcategory,
 		query.Code,
@@ -602,11 +565,9 @@ func (idx *NQEQueryIndex) calculateKeywordScore(query *NQEQueryIndexEntry, searc
 	for _, term := range keyTerms {
 		if strings.Contains(searchableText, term) {
 			matchedKeyTerms++
-			// Strong boost for matches in intent/description
+			// Boost score for exact matches in important fields
 			if strings.Contains(strings.ToLower(query.Intent), term) {
-				score += 5.0 // Intent is most valuable
-			} else if strings.Contains(strings.ToLower(query.Description), term) {
-				score += 4.0 // Description is very valuable
+				score += 4.0 // Intent (last path segment) is most valuable
 			} else if strings.Contains(strings.ToLower(query.QueryID), term) {
 				score += 3.0 // QueryID match is very valuable
 			} else if strings.Contains(strings.ToLower(query.Path), term) {
@@ -629,71 +590,25 @@ func (idx *NQEQueryIndex) calculateKeywordScore(query *NQEQueryIndexEntry, searc
 		}
 	}
 
-	// NEW: Recognize foundational data retrieval patterns
-	// Boost queries that return raw data per device when searching for counting operations
-	if idx.isFoundationalDataQuery(query, searchTerms) {
-		score += 3.0 // Significant boost for foundational queries
-		idx.logger.Debug("Boosted foundational query %s for search terms: %v", query.QueryID, searchTerms)
-	}
-
 	// Return a minimum score if we matched anything
-	if matchedTerms > 0 || matchedKeyTerms > 0 {
-		return math.Max(score, 0.1) // Ensure minimum score for any match
+	if matchedKeyTerms > 0 || matchedTerms > 0 {
+		// Calculate final score with more weight on key term matches
+		keyTermRatio := float64(matchedKeyTerms) / float64(len(keyTerms))
+		termRatio := float64(matchedTerms) / float64(len(searchTerms))
+		avgScore := score / float64(matchedKeyTerms+matchedTerms)
+
+		// Scale from 0.05 to 1.0 with more emphasis on key term matches
+		finalScore := 0.05 + (keyTermRatio * 0.4) + (termRatio * 0.3) + (avgScore * 0.25)
+
+		// Cap at 1.0
+		if finalScore > 1.0 {
+			finalScore = 1.0
+		}
+
+		return finalScore
 	}
 
 	return 0.0
-}
-
-// isFoundationalDataQuery checks if a query is a foundational data source for counting operations
-func (idx *NQEQueryIndex) isFoundationalDataQuery(query *NQEQueryIndexEntry, searchTerms []string) bool {
-	// Check if search is about counting/analysis
-	isCountingSearch := false
-	for _, term := range searchTerms {
-		if term == "count" || term == "counts" || term == "summary" || term == "total" ||
-			term == "number" || term == "how" || term == "many" {
-			isCountingSearch = true
-			break
-		}
-	}
-
-	if !isCountingSearch {
-		return false
-	}
-
-	// Check if query returns foundational data (not already counting)
-	queryText := strings.ToLower(query.Code + " " + query.Intent + " " + query.Description)
-
-	// Skip if query already does counting
-	if strings.Contains(queryText, "count(") || strings.Contains(queryText, "length(") ||
-		strings.Contains(queryText, "sum(") || strings.Contains(queryText, "aggregate") {
-		return false
-	}
-
-	// Check for foundational patterns
-	foundationalPatterns := []string{
-		"foreach device",    // Iterates through devices
-		"device.name",       // Returns device names
-		"per device",        // Explicitly per device
-		"routing table",     // Routing data
-		"routes",            // Route data
-		"network instances", // Network data
-		"interfaces",        // Interface data
-		"configuration",     // Config data
-		"select distinct",   // Data retrieval
-		"returns",           // Data return
-		"get",               // Data retrieval
-		"show",              // Data display
-	}
-
-	patternMatches := 0
-	for _, pattern := range foundationalPatterns {
-		if strings.Contains(queryText, pattern) {
-			patternMatches++
-		}
-	}
-
-	// Consider foundational if it has multiple foundational patterns
-	return patternMatches >= 2
 }
 
 // GetQueryByID retrieves a specific query by its ID
@@ -751,16 +666,11 @@ func (idx *NQEQueryIndex) GetStatistics() map[string]interface{} {
 	}
 
 	return map[string]interface{}{
-		"total_queries":    len(idx.queries),
-		"embedded_queries": embeddedCount,
-		"categories":       categories,
-		"subcategories":    subcategories,
-		"embedding_coverage": func() float64 {
-			if len(idx.queries) == 0 {
-				return 0.0
-			}
-			return float64(embeddedCount) / float64(len(idx.queries))
-		}(),
+		"total_queries":      len(idx.queries),
+		"embedded_queries":   embeddedCount,
+		"categories":         categories,
+		"subcategories":      subcategories,
+		"embedding_coverage": float64(embeddedCount) / float64(len(idx.queries)),
 	}
 }
 

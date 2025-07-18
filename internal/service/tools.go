@@ -50,7 +50,6 @@ type RunNQEQueryByIDArgs struct {
 	SnapshotID string                 `json:"snapshot_id,omitempty" description:"Specific snapshot ID to query (optional)"`
 	Parameters map[string]interface{} `json:"parameters,omitempty" description:"Optional parameters for the query"`
 	Options    *NQEQueryOptions       `json:"options,omitempty" description:"Optional query options for sorting and filtering"`
-	AllResults bool                   `json:"all_results,omitempty" description:"If true, fetch all results using pagination (limit/offset) and aggregate them into a single response."`
 }
 
 type NQEQueryOptions struct {
@@ -203,8 +202,8 @@ type ClearCacheArgs struct {
 type SearchNQEQueriesArgs struct {
 	Query       string `json:"query" jsonschema:"required,description=Natural language description of what you want to analyze. Be specific and descriptive. Good examples: 'show me AWS security vulnerabilities', 'find BGP routing issues', 'check interface utilization', 'devices with high CPU usage'. Avoid vague terms like 'network' or 'config'."`
 	Limit       int    `json:"limit" jsonschema:"description=Maximum number of query suggestions to return (default: 10, max: 50)"`
-	Category    string `json:"category" jsonschema:"description=Filter by category to narrow results (e.g., 'Cloud', 'L3', 'Security', 'Device')."`
-	Subcategory string `json:"subcategory" jsonschema:"description=Filter by subcategory (e.g., 'AWS', 'BGP', 'ACL', 'OSPF')."`
+	Category    string `json:"category" jsonschema:"description=Filter by category to narrow results (e.g., 'Cloud', 'L3', 'Security', 'Device'). Use get_query_index_stats to see available categories."`
+	Subcategory string `json:"subcategory" jsonschema:"description=Filter by subcategory (e.g., 'AWS', 'BGP', 'ACL', 'OSPF'). Use get_query_index_stats with detailed:true to see available subcategories."`
 	IncludeCode bool   `json:"include_code" jsonschema:"description=Include NQE source code in results for advanced users (default: false). Warning: makes response much longer."`
 }
 
@@ -212,6 +211,11 @@ type SearchNQEQueriesArgs struct {
 type InitializeQueryIndexArgs struct {
 	RebuildIndex       bool `json:"rebuild_index" jsonschema:"description=Force rebuild of the query index from spec file (default: false). Only needed if spec file has been updated."`
 	GenerateEmbeddings bool `json:"generate_embeddings" jsonschema:"description=Generate new AI embeddings for semantic search (default: false). Requires OpenAI API key and takes several minutes. Creates offline cache for fast searches."`
+}
+
+// GetQueryIndexStatsArgs represents arguments for query index statistics
+type GetQueryIndexStatsArgs struct {
+	Detailed bool `json:"detailed"`
 }
 
 // FindExecutableQueryArgs represents the arguments for finding executable queries
@@ -228,10 +232,9 @@ type SmartQueryWorkflowArgs struct {
 
 // Database Hydration Tools Arguments
 type HydrateDatabaseArgs struct {
-	ForceRefresh         bool `json:"force_refresh" jsonschema:"description=Force refresh all queries from API even if database has data (default: false)"`
-	EnhancedMode         bool `json:"enhanced_mode" jsonschema:"description=Use enhanced API mode for metadata enrichment (default: true)"`
-	MaxRetries           int  `json:"max_retries" jsonschema:"description=Maximum number of retry attempts for API calls (default: 3)"`
-	RegenerateEmbeddings bool `json:"regenerate_embeddings" jsonschema:"description=Automatically regenerate AI embeddings after hydration for improved semantic search (default: false)"`
+	ForceRefresh bool `json:"force_refresh" jsonschema:"description=Force refresh all queries from API even if database has data (default: false)"`
+	EnhancedMode bool `json:"enhanced_mode" jsonschema:"description=Use enhanced API mode for metadata enrichment (default: true)"`
+	MaxRetries   int  `json:"max_retries" jsonschema:"description=Maximum number of retry attempts for API calls (default: 3)"`
 }
 
 type RefreshQueryIndexArgs struct {
@@ -240,10 +243,6 @@ type RefreshQueryIndexArgs struct {
 
 type GetDatabaseStatusArgs struct {
 	// No parameters needed - returns database and query index status
-}
-
-type GetQueryIndexStatsArgs struct {
-	Detailed bool `json:"detailed,omitempty" jsonschema:"description=Include detailed statistics (default: false)"`
 }
 
 // Memory Management Tools Arguments
@@ -283,8 +282,8 @@ type GetRelationsArgs struct {
 }
 
 type GetObservationsArgs struct {
-	EntityID        string `json:"entity_id" jsonschema:"required,description=ID of the entity to get observations for"`
-	ObservationType string `json:"observation_type" jsonschema:"description=Filter by observation type"`
+	EntityID         string `json:"entity_id" jsonschema:"required,description=ID of the entity to get observations for"`
+	ObservationType  string `json:"observation_type" jsonschema:"description=Filter by observation type"`
 }
 
 type DeleteEntityArgs struct {
@@ -320,27 +319,3 @@ type GetQueryAnalyticsArgs struct {
 // ```
 //
 // Each line is a line pattern. Indentation defines parent/child relationships. Use curly braces for variable extraction (e.g., {ip:string}). For more, see the data extraction guide."
-
-// Large NQE Results Workflow Arguments
-type LargeNQEResultsWorkflowArgs struct {
-	SessionID string `json:"session_id,omitempty" jsonschema:"description=Session ID for tracking workflow state"`
-}
-
-// Bloom Search Arguments
-type BuildBloomFilterArgs struct {
-	NetworkID  string `json:"network_id" jsonschema:"required,description=Network ID to build filter for"`
-	FilterType string `json:"filter_type" jsonschema:"required,description=Type of filter to build (device, interface, config)"`
-	QueryID    string `json:"query_id" jsonschema:"required,description=NQE query ID to use for building the filter"`
-	ChunkSize  int    `json:"chunk_size,omitempty" jsonschema:"description=Chunk size for processing (default: 200)"`
-}
-
-type SearchBloomFilterArgs struct {
-	NetworkID   string   `json:"network_id" jsonschema:"required,description=Network ID to search in"`
-	FilterType  string   `json:"filter_type" jsonschema:"required,description=Type of filter to search (device, interface, config)"`
-	SearchTerms []string `json:"search_terms" jsonschema:"required,description=Search terms to look for"`
-	EntityID    string   `json:"entity_id" jsonschema:"required,description=Entity ID containing the full dataset to search"`
-}
-
-type GetBloomFilterStatsArgs struct {
-	// No parameters needed - returns statistics for all bloom filters
-}

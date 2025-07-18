@@ -191,31 +191,27 @@ func TestEnhancedEvictionPolicies(t *testing.T) {
 
 		result := &forward.NQERunResult{Items: []map[string]interface{}{{"test": "data"}}}
 
+		// Add entries
 		cache.Put("query1", "net", "snap", result)
 		cache.Put("query2", "net", "snap", result)
 		cache.Put("query3", "net", "snap", result)
+
+		// Access query1 to make it more recently used
 		cache.Get("query1", "net", "snap")
+
+		// Add another entry, should evict query2 (least recently used)
 		cache.Put("query4", "net", "snap", result)
 
-		present := map[string]bool{}
-		for _, q := range []string{"query1", "query2", "query3", "query4"} {
-			_, found := cache.Get(q, "net", "snap")
-			present[q] = found
+		// query2 should be evicted
+		_, found := cache.Get("query2", "net", "snap")
+		if found {
+			t.Error("Expected query2 to be evicted by LRU policy")
 		}
-		if !present["query1"] || !present["query4"] {
-			t.Error("Expected query1 and query4 to be present after LRU eviction")
-		}
-		// Only check cache size at the end
-		finalSize := len(cache.entries) // Directly check internal map size for accuracy
-		// This is more accurate than counting Get hits, since evicted entries are truly removed from the map
-		t.Logf("Final cache size after LRU eviction: %d", finalSize)
-		if finalSize > 3 {
-			t.Errorf("Expected at most 3 entries in cache, got %d", finalSize)
-		}
-		for q, v := range present {
-			if !v {
-				t.Logf("LRU eviction: %s was evicted", q)
-			}
+
+		// query1 should still be present (recently accessed)
+		_, found = cache.Get("query1", "net", "snap")
+		if !found {
+			t.Error("Expected query1 to still be present")
 		}
 	})
 
@@ -232,32 +228,29 @@ func TestEnhancedEvictionPolicies(t *testing.T) {
 
 		result := &forward.NQERunResult{Items: []map[string]interface{}{{"test": "data"}}}
 
+		// Add entries
 		cache.Put("query1", "net", "snap", result)
 		cache.Put("query2", "net", "snap", result)
 		cache.Put("query3", "net", "snap", result)
+
+		// Access query1 multiple times to increase frequency
 		cache.Get("query1", "net", "snap")
 		cache.Get("query1", "net", "snap")
-		cache.Get("query3", "net", "snap")
+		cache.Get("query3", "net", "snap") // Access query3 once
+
+		// Add another entry, should evict query2 (least frequently used)
 		cache.Put("query4", "net", "snap", result)
 
-		present := map[string]bool{}
-		for _, q := range []string{"query1", "query2", "query3", "query4"} {
-			_, found := cache.Get(q, "net", "snap")
-			present[q] = found
+		// query2 should be evicted
+		_, found := cache.Get("query2", "net", "snap")
+		if found {
+			t.Error("Expected query2 to be evicted by LFU policy")
 		}
-		if !present["query1"] || !present["query4"] {
-			t.Error("Expected query1 and query4 to be present after LFU eviction")
-		}
-		finalSize := len(cache.entries) // Directly check internal map size for accuracy
-		// This is more accurate than counting Get hits, since evicted entries are truly removed from the map
-		t.Logf("Final cache size after LFU eviction: %d", finalSize)
-		if finalSize > 3 {
-			t.Errorf("Expected at most 3 entries in cache, got %d", finalSize)
-		}
-		for q, v := range present {
-			if !v {
-				t.Logf("LFU eviction: %s was evicted", q)
-			}
+
+		// query1 should still be present (most frequently used)
+		_, found = cache.Get("query1", "net", "snap")
+		if !found {
+			t.Error("Expected query1 to still be present")
 		}
 	})
 
@@ -314,6 +307,7 @@ func TestCompressionFeatures(t *testing.T) {
 		}
 		cache := NewSemanticCache(embeddingService, createTestLogger(), "test", cfg)
 
+		// Create a large result that would benefit from compression
 		largeResult := &forward.NQERunResult{
 			Items: make([]map[string]interface{}, 100),
 		}
@@ -330,6 +324,7 @@ func TestCompressionFeatures(t *testing.T) {
 			t.Fatalf("Failed to store large result: %v", err)
 		}
 
+		// Retrieve and verify the result is the same
 		retrievedResult, found := cache.Get("large_query", "net", "snap")
 		if !found {
 			t.Fatal("Failed to retrieve compressed result")
@@ -339,14 +334,12 @@ func TestCompressionFeatures(t *testing.T) {
 			t.Errorf("Expected %d items, got %d", len(largeResult.Items), len(retrievedResult.Items))
 		}
 
+		// Check compression metrics
 		stats := cache.GetStats()
 		compressionRatio := stats["compression_ratio"].(string)
 		if compressionRatio == "0.000" {
-			t.Log("Compression ratio is 0.000; data may not be compressible. Accepting as valid.")
+			t.Error("Expected compression to have occurred")
 		}
-		// Only fail if result is not retrievable or is corrupted
-		// (already checked above)
-		// Log the compression ratio for info
 		t.Logf("Compression ratio: %s", compressionRatio)
 	})
 
@@ -487,6 +480,7 @@ func TestEnhancedMetrics(t *testing.T) {
 
 	result := &forward.NQERunResult{Items: []map[string]interface{}{{"test": "data"}}}
 
+	// Perform operations to generate metrics
 	cache.Put("metric_query1", "net", "snap", result)
 	cache.Put("metric_query2", "net", "snap", result)
 
@@ -495,7 +489,7 @@ func TestEnhancedMetrics(t *testing.T) {
 
 	stats := cache.GetStats()
 
-	// Only check that metrics are present and hits/misses are non-negative
+	// Verify all enhanced metrics are present
 	expectedMetrics := []string{
 		"total_entries", "total_queries", "cache_hits", "cache_misses",
 		"hit_rate_percent", "max_memory_mb", "current_memory_mb",
@@ -512,15 +506,19 @@ func TestEnhancedMetrics(t *testing.T) {
 		}
 	}
 
-	if stats["total_entries"].(int) < 0 {
-		t.Errorf("Expected non-negative total entries, got %v", stats["total_entries"])
+	// Verify specific metric values
+	if stats["total_entries"].(int) != 2 {
+		t.Errorf("Expected 2 total entries, got %v", stats["total_entries"])
 	}
-	if stats["cache_hits"].(int64) < 0 {
-		t.Errorf("Expected non-negative cache hits, got %v", stats["cache_hits"])
+
+	if stats["cache_hits"].(int64) != 1 {
+		t.Errorf("Expected 1 cache hit, got %v", stats["cache_hits"])
 	}
-	if stats["cache_misses"].(int64) < 0 {
-		t.Errorf("Expected non-negative cache misses, got %v", stats["cache_misses"])
+
+	if stats["cache_misses"].(int64) != 1 {
+		t.Errorf("Expected 1 cache miss, got %v", stats["cache_misses"])
 	}
+
 	if stats["eviction_policy"].(string) != "lru" {
 		t.Errorf("Expected eviction policy 'lru', got %v", stats["eviction_policy"])
 	}

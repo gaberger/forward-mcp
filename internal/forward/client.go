@@ -14,8 +14,6 @@ import (
 	"os"
 	"time"
 
-	"math"
-
 	"github.com/forward-mcp/internal/config"
 	"github.com/forward-mcp/internal/logger"
 )
@@ -52,7 +50,6 @@ type ClientInterface interface {
 	GetNQEAllQueriesEnhancedWithCache(existingCommitIDs map[string]string) ([]NQEQueryDetail, error)
 	GetNQEAllQueriesEnhancedWithCacheContext(ctx context.Context, existingCommitIDs map[string]string) ([]NQEQueryDetail, error)
 	GetNQEQueryByCommit(commitID string, path string, repository string) (*NQEQueryDetail, error)
-	GetNQEQueryByCommitWithContext(ctx context.Context, commitID string, path string, repository string) (*NQEQueryDetail, error)
 	DiffNQEQuery(before, after string, request *NQEDiffRequest) (*NQEDiffResult, error)
 
 	// Device operations
@@ -430,112 +427,6 @@ func (c *Client) SendChatRequest(req *ChatRequest) (*ChatResponse, error) {
 	return &chatResp, nil
 }
 
-// retryWithBackoff performs an operation with exponential backoff
-func (c *Client) retryWithBackoff(ctx context.Context, operation func() error, maxRetries int, baseDelay time.Duration) error {
-	var lastErr error
-
-	for attempt := 0; attempt <= maxRetries; attempt++ {
-		// Check if context is cancelled
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-
-		err := operation()
-		if err == nil {
-			return nil // Success
-		}
-
-		lastErr = err
-
-		// Don't sleep after the last attempt
-		if attempt == maxRetries {
-			break
-		}
-
-		// Calculate exponential backoff delay
-		delay := time.Duration(float64(baseDelay) * math.Pow(2, float64(attempt)))
-		if delay > 60*time.Second {
-			delay = 60 * time.Second // Cap at 60 seconds
-		}
-
-		// Log retry attempt
-		if debugLogger := logger.New(); debugLogger != nil {
-			debugLogger.Info("🔄 Retrying operation in %v (attempt %d/%d): %v", delay, attempt+1, maxRetries, err)
-		}
-
-		// Wait before retry with context cancellation check
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(delay):
-		}
-	}
-
-	return fmt.Errorf("operation failed after %d retries: %w", maxRetries, lastErr)
-}
-
-// makeRequestWithRetry makes an HTTP request with retry logic and exponential backoff
-func (c *Client) makeRequestWithRetry(ctx context.Context, method, endpoint string, body interface{}, maxRetries int) (*http.Response, error) {
-	var response *http.Response
-	var reqBody []byte
-	var err error
-
-	// Prepare request body once
-	if body != nil {
-		reqBody, err = json.Marshal(body)
-		if err != nil {
-			return nil, fmt.Errorf("failed to marshal request body: %w", err)
-		}
-	}
-
-	operation := func() error {
-		req, err := http.NewRequestWithContext(ctx, method, c.config.APIBaseURL+endpoint, bytes.NewBuffer(reqBody))
-		if err != nil {
-			return fmt.Errorf("failed to create request: %w", err)
-		}
-
-		req.Header.Set("Content-Type", "application/json")
-		auth := base64.StdEncoding.EncodeToString([]byte(c.config.APIKey + ":" + c.config.APISecret))
-		req.Header.Set("Authorization", "Basic "+auth)
-
-		resp, err := c.httpClient.Do(req)
-		if err != nil {
-			return fmt.Errorf("failed to send request: %w", err)
-		}
-
-		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-			// Read the response body for error details
-			errorBody, readErr := io.ReadAll(resp.Body)
-			resp.Body.Close()
-
-			errorMsg := fmt.Sprintf("unexpected status code: %d", resp.StatusCode)
-			if readErr == nil && len(errorBody) > 0 {
-				errorMsg += fmt.Sprintf(", response: %s", string(errorBody))
-			}
-
-			// Retry on 5xx errors and 429 (rate limiting)
-			if resp.StatusCode >= 500 || resp.StatusCode == 429 {
-				return fmt.Errorf("retryable error: %s", errorMsg)
-			}
-
-			// Don't retry on 4xx errors (except 429)
-			return fmt.Errorf("non-retryable error: %s", errorMsg)
-		}
-
-		response = resp
-		return nil
-	}
-
-	err = c.retryWithBackoff(ctx, operation, maxRetries, 1*time.Second)
-	if err != nil {
-		return nil, err
-	}
-
-	return response, nil
-}
-
 func (c *Client) GetAvailableModels() ([]string, error) {
 	resp, err := c.makeRequest("GET", "/models", nil)
 	if err != nil {
@@ -896,10 +787,9 @@ func (c *Client) GetNQEOrgQueriesEnhancedWithCacheContext(ctx context.Context, e
 	// First, get the list of queries with commit IDs
 	endpoint := "/api/nqe/repos/org/commits/head/queries"
 
-	// Use retry logic for the initial query list request
-	resp, err := c.makeRequestWithRetry(ctx, "GET", endpoint, nil, 3)
+	resp, err := c.makeRequest("GET", endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get NQE org queries after retries: %w", err)
+		return nil, fmt.Errorf("failed to get NQE org queries: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -946,7 +836,7 @@ func (c *Client) GetNQEOrgQueriesEnhancedWithCacheContext(ctx context.Context, e
 			// Continue processing
 		}
 
-		queryDetail, err := c.GetNQEQueryByCommitWithContext(ctx, querySummary.LastCommitId, querySummary.Path, "org")
+		queryDetail, err := c.GetNQEQueryByCommit(querySummary.LastCommitId, querySummary.Path, "org")
 		if err != nil {
 			failedQueries++
 			// Log only the first failure as an example, not every single one
@@ -1050,10 +940,9 @@ func (c *Client) GetNQEFwdQueriesEnhancedWithCacheContext(ctx context.Context, e
 	// First, get the list of queries with commit IDs
 	endpoint := "/api/nqe/repos/fwd/commits/head/queries"
 
-	// Use retry logic for the initial query list request
-	resp, err := c.makeRequestWithRetry(ctx, "GET", endpoint, nil, 3)
+	resp, err := c.makeRequest("GET", endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get NQE fwd queries after retries: %w", err)
+		return nil, fmt.Errorf("failed to get NQE fwd queries: %w", err)
 	}
 	defer resp.Body.Close()
 
@@ -1100,7 +989,7 @@ func (c *Client) GetNQEFwdQueriesEnhancedWithCacheContext(ctx context.Context, e
 			// Continue processing
 		}
 
-		queryDetail, err := c.GetNQEQueryByCommitWithContext(ctx, querySummary.LastCommitId, querySummary.Path, "fwd")
+		queryDetail, err := c.GetNQEQueryByCommit(querySummary.LastCommitId, querySummary.Path, "fwd")
 		if err != nil {
 			failedQueries++
 			// Log only the first failure as an example, not every single one
@@ -1284,15 +1173,11 @@ func (c *Client) GetNQEAllQueriesEnhancedWithCacheContext(ctx context.Context, e
 }
 
 func (c *Client) GetNQEQueryByCommit(commitID string, path string, repository string) (*NQEQueryDetail, error) {
-	return c.GetNQEQueryByCommitWithContext(context.Background(), commitID, path, repository)
-}
-
-func (c *Client) GetNQEQueryByCommitWithContext(ctx context.Context, commitID string, path string, repository string) (*NQEQueryDetail, error) {
 	endpoint := fmt.Sprintf("/api/nqe/repos/%s/commits/%s/queries?path=%s", repository, commitID, url.QueryEscape(path))
-	// Use retry logic for individual query requests
-	resp, err := c.makeRequestWithRetry(ctx, "GET", endpoint, nil, 2) // 2 retries for individual queries
+
+	resp, err := c.makeRequest("GET", endpoint, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get NQE query by commit after retries: %w", err)
+		return nil, fmt.Errorf("failed to get NQE query by commit: %w", err)
 	}
 	defer resp.Body.Close()
 

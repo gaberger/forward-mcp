@@ -1,6 +1,7 @@
 package service
 
 import (
+	"database/sql"
 	"os"
 	"path/filepath"
 	"testing"
@@ -32,18 +33,11 @@ func createTestMemorySystem(t *testing.T) *MemorySystem {
 	}
 
 	// Open the database
-	// db, err := sql.Open("sqlite3", dbPath)
-	db, err := openSQLiteWithForeignKeys(dbPath)
+	db, err := sql.Open("sqlite3", dbPath)
 	if err != nil {
 		t.Fatalf("Failed to open test database: %v", err)
 	}
 	memorySystem.db = db
-
-	// Enable foreign key support for cascading deletes in tests
-	// _, err = db.Exec("PRAGMA foreign_keys = ON;")
-	// if err != nil {
-	// 	t.Fatalf("Failed to enable foreign keys in test DB: %v", err)
-	// }
 
 	// Initialize schema
 	if err := memorySystem.initSchema(); err != nil {

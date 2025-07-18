@@ -1,0 +1,1583 @@
+=== RUN   TestAPIMemoryTracker_TrackNetworkQuery
+--- PASS: TestAPIMemoryTracker_TrackNetworkQuery (0.15s)
+=== RUN   TestAPIMemoryTracker_TrackDeviceDiscovery
+--- PASS: TestAPIMemoryTracker_TrackDeviceDiscovery (0.12s)
+=== RUN   TestAPIMemoryTracker_TrackPathSearch
+--- PASS: TestAPIMemoryTracker_TrackPathSearch (0.11s)
+=== RUN   TestAPIMemoryTracker_GetQueryAnalytics
+--- PASS: TestAPIMemoryTracker_GetQueryAnalytics (0.22s)
+=== RUN   TestAPIMemoryTracker_NilMemorySystem
+--- PASS: TestAPIMemoryTracker_NilMemorySystem (0.00s)
+=== RUN   TestIntegrationListNetworks
+[INFO] 2025/07/15 11:43:51 Using instance ID '9cba3de5' for partitioning (based on https://fwd.app)
+[INFO] 2025/07/15 11:43:51 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:43:51 Using database directory: /Users/gary/.forward-mcp/data
+[INFO] 2025/07/15 11:43:51 Memory system initialized at: /Users/gary/.forward-mcp/data/memory.db
+[INFO] 2025/07/15 11:43:51 API memory tracker initialized for tracking API results and relationships
+[INFO] 2025/07/15 11:43:51 🔄 Database update callback registered for automatic query index refresh
+[INFO] 2025/07/15 11:43:51 🔄 Loading existing queries from database...
+[INFO] 2025/07/15 11:43:51 Loaded 3258 NQE queries into search index from database
+[INFO] 2025/07/15 11:43:51 🔄 Query index initialized with 3258 existing queries from database
+[INFO] 2025/07/15 11:43:51 💡 Tip: Run 'hydrate_database' with enhanced_mode for richer query metadata
+    integration_test.go:69: Networks response: Found 25 networks:
+        [{"id":"137847","name":"MULTICAST-DEMO","createdAt":0,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"152692","name":"containerlab","createdAt":1639584611414,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"160622","name":"VERIFY","createdAt":1684529476092,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"161469","name":"TENNANT","createdAt":1685656327046,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"162112","name":"ALL","createdAt":1686754335863,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"166688","name":"CHG_DEMO","createdAt":1695348066967,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"166932","name":"ALL-remove","createdAt":1695822439854,"orgId":"1499","creatorId":"7987","creator":"sales-eng-gborg@forwardnetworks.com"},{"id":"169104","name":"ALL-FIX","createdAt":1700596312262,"orgId":"1499","creatorId":"8196","creator":"glenturner+gborg@forwardnetworks.com"},{"id":"169120","name":"All-GT-Demo","createdAt":1700664922422,"orgId":"1499","creatorId":"8196","creator":"glenturner+gborg@forwardnetworks.com"},{"id":"173976","name":"Path_f(host12)","createdAt":1710866563457,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"176238","name":"CHG_DEMO_TEST","createdAt":1715100179990,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"176497","name":"TS Cert 1","createdAt":1715694306189,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"177845","name":"Workspace_Border_Devices","createdAt":1717779365304,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"184483","name":"Path_f(us-client-1)dasd","createdAt":1725993054646,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"185526","name":"Mystery","createdAt":1727365050760,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"185890","name":"TestDrive 2.3","createdAt":1727876656545,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"186464","name":"GTDev-DoNotRemove","createdAt":1728608378998,"orgId":"1499","creatorId":"8196","creator":"glenturner+gborg@forwardnetworks.com"},{"id":"186702","name":"NSX-T","createdAt":1728997021145,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"187068","name":"TEST-ALL","createdAt":1729526401340,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"187782","name":"Multicast-New","createdAt":1730382397909,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"196183","name":"DemoFoundry-1.2","createdAt":1741608766035,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"204438","name":"Global Network","createdAt":1747268070564,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"204441","name":"US","createdAt":1747268135970,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"208720","name":"ACI-Example","createdAt":1750249778261,"orgId":"1499","creatorId":"4519","creator":"garyberger+gborg@forwardnetworks.com"},{"id":"210800","name":"GTSnapshotValidation","createdAt":1752017833077,"orgId":"1499","creatorId":"8196","creator":"glenturner+gborg@forwardnetworks.com"}]
+--- PASS: TestIntegrationListNetworks (1.67s)
+=== RUN   TestIntegrationSearchPaths
+[INFO] 2025/07/15 11:43:52 Using instance ID '9cba3de5' for partitioning (based on https://fwd.app)
+[INFO] 2025/07/15 11:43:52 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:43:52 Using database directory: /Users/gary/.forward-mcp/data
+[INFO] 2025/07/15 11:43:52 Memory system initialized at: /Users/gary/.forward-mcp/data/memory.db
+[INFO] 2025/07/15 11:43:52 API memory tracker initialized for tracking API results and relationships
+[INFO] 2025/07/15 11:43:52 🔄 Database update callback registered for automatic query index refresh
+[INFO] 2025/07/15 11:43:52 🔄 Loading existing queries from database...
+[INFO] 2025/07/15 11:43:52 Loaded 3258 NQE queries into search index from database
+[INFO] 2025/07/15 11:43:52 🔄 Query index initialized with 3258 existing queries from database
+[INFO] 2025/07/15 11:43:52 💡 Tip: Run 'hydrate_database' with enhanced_mode for richer query metadata
+    integration_test.go:88: Testing path search on network: MULTICAST-DEMO (137847)
+[INFO] 2025/07/15 11:43:53 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:43:53 searchPaths - Using latest snapshot ID: 646025
+[INFO] 2025/07/15 11:43:53 [ERROR] Path search failed: unexpected status code: 400, response: {"apiUrl":"/api/networks/137847/paths?dstIp=8.8.8.8&maxResults=1&snapshotId=646025","httpMethod":"GET","message":"Either 'from' or 'srcIp' is required"}
+    integration_test.go:99: Path search failed (this may be expected): failed to search paths: unexpected status code: 400, response: {"apiUrl":"/api/networks/137847/paths?dstIp=8.8.8.8&maxResults=1&snapshotId=646025","httpMethod":"GET","message":"Either 'from' or 'srcIp' is required"}
+--- PASS: TestIntegrationSearchPaths (1.01s)
+=== RUN   TestIntegrationSearchPathsSpecificIPs
+[INFO] 2025/07/15 11:43:53 Using instance ID '9cba3de5' for partitioning (based on https://fwd.app)
+[INFO] 2025/07/15 11:43:53 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:43:53 Using database directory: /Users/gary/.forward-mcp/data
+[INFO] 2025/07/15 11:43:53 Memory system initialized at: /Users/gary/.forward-mcp/data/memory.db
+[INFO] 2025/07/15 11:43:53 API memory tracker initialized for tracking API results and relationships
+[INFO] 2025/07/15 11:43:53 🔄 Database update callback registered for automatic query index refresh
+[INFO] 2025/07/15 11:43:53 🔄 Loading existing queries from database...
+[INFO] 2025/07/15 11:43:53 Loaded 3258 NQE queries into search index from database
+[INFO] 2025/07/15 11:43:53 🔄 Query index initialized with 3258 existing queries from database
+[INFO] 2025/07/15 11:43:53 💡 Tip: Run 'hydrate_database' with enhanced_mode for richer query metadata
+    integration_test.go:127: Testing path search on network: MULTICAST-DEMO (137847)
+=== RUN   TestIntegrationSearchPathsSpecificIPs/Customer_Specific_IPs_Basic
+    integration_test.go:199: Testing: Basic path search with customer's specific source and destination IPs
+[INFO] 2025/07/15 11:43:54 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:43:54 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:232: Response for Customer_Specific_IPs_Basic:
+        Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.6.142.197 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:243: No paths found between 10.6.142.197 and 10.5.0.130 (this may be expected)
+=== RUN   TestIntegrationSearchPathsSpecificIPs/Customer_Specific_IPs_With_Intent
+    integration_test.go:199: Testing: Path search with PREFER_DELIVERED intent
+[INFO] 2025/07/15 11:43:54 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:43:55 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:232: Response for Customer_Specific_IPs_With_Intent:
+        Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.6.142.197 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:243: No paths found between 10.6.142.197 and 10.5.0.130 (this may be expected)
+=== RUN   TestIntegrationSearchPathsSpecificIPs/Customer_Specific_IPs_With_Functions
+    integration_test.go:199: Testing: Path search including network functions for detailed analysis
+[INFO] 2025/07/15 11:43:55 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:43:55 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:232: Response for Customer_Specific_IPs_With_Functions:
+        Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.6.142.197 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:243: No paths found between 10.6.142.197 and 10.5.0.130 (this may be expected)
+=== RUN   TestIntegrationSearchPathsSpecificIPs/Customer_Specific_IPs_TCP_80
+    integration_test.go:199: Testing: Path search for TCP traffic to port 80
+[INFO] 2025/07/15 11:43:55 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:43:56 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:232: Response for Customer_Specific_IPs_TCP_80:
+        Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.6.142.197 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:243: No paths found between 10.6.142.197 and 10.5.0.130 (this may be expected)
+    integration_test.go:257: TCP port 80 specific test completed
+=== RUN   TestIntegrationSearchPathsSpecificIPs/Customer_Reverse_Path
+    integration_test.go:199: Testing: Reverse path search to test bidirectional connectivity
+[INFO] 2025/07/15 11:43:56 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:43:56 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:232: Response for Customer_Reverse_Path:
+        Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.5.0.130 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:243: No paths found between 10.5.0.130 and 10.6.142.197 (this may be expected)
+--- PASS: TestIntegrationSearchPathsSpecificIPs (2.96s)
+    --- PASS: TestIntegrationSearchPathsSpecificIPs/Customer_Specific_IPs_Basic (0.60s)
+    --- PASS: TestIntegrationSearchPathsSpecificIPs/Customer_Specific_IPs_With_Intent (0.47s)
+    --- PASS: TestIntegrationSearchPathsSpecificIPs/Customer_Specific_IPs_With_Functions (0.45s)
+    --- PASS: TestIntegrationSearchPathsSpecificIPs/Customer_Specific_IPs_TCP_80 (0.45s)
+    --- PASS: TestIntegrationSearchPathsSpecificIPs/Customer_Reverse_Path (0.45s)
+=== RUN   TestIntegrationPathSearchResponseStructure
+[INFO] 2025/07/15 11:43:56 Using instance ID '9cba3de5' for partitioning (based on https://fwd.app)
+[INFO] 2025/07/15 11:43:56 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:43:56 Using database directory: /Users/gary/.forward-mcp/data
+[INFO] 2025/07/15 11:43:56 Memory system initialized at: /Users/gary/.forward-mcp/data/memory.db
+[INFO] 2025/07/15 11:43:56 API memory tracker initialized for tracking API results and relationships
+[INFO] 2025/07/15 11:43:56 🔄 Database update callback registered for automatic query index refresh
+[INFO] 2025/07/15 11:43:56 🔄 Loading existing queries from database...
+[INFO] 2025/07/15 11:43:56 Loaded 3258 NQE queries into search index from database
+[INFO] 2025/07/15 11:43:56 🔄 Query index initialized with 3258 existing queries from database
+[INFO] 2025/07/15 11:43:56 💡 Tip: Run 'hydrate_database' with enhanced_mode for richer query metadata
+    integration_test.go:285: Testing path search response structure on network: MULTICAST-DEMO
+[INFO] 2025/07/15 11:43:57 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:43:57 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:324: ✅ Path search response structure is valid
+--- PASS: TestIntegrationPathSearchResponseStructure (1.00s)
+=== RUN   TestIntegrationRunNQEQuery
+[INFO] 2025/07/15 11:43:57 Using instance ID '9cba3de5' for partitioning (based on https://fwd.app)
+[INFO] 2025/07/15 11:43:57 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:43:57 Using database directory: /Users/gary/.forward-mcp/data
+[INFO] 2025/07/15 11:43:57 Memory system initialized at: /Users/gary/.forward-mcp/data/memory.db
+[INFO] 2025/07/15 11:43:57 API memory tracker initialized for tracking API results and relationships
+[INFO] 2025/07/15 11:43:57 🔄 Database update callback registered for automatic query index refresh
+[INFO] 2025/07/15 11:43:57 🔄 Loading existing queries from database...
+[INFO] 2025/07/15 11:43:57 Loaded 3258 NQE queries into search index from database
+[INFO] 2025/07/15 11:43:57 🔄 Query index initialized with 3258 existing queries from database
+[INFO] 2025/07/15 11:43:57 💡 Tip: Run 'hydrate_database' with enhanced_mode for richer query metadata
+    integration_test.go:365: NQE query response: NQE query completed. Found 5 items:
+        {"snapshotId":"646025","items":[{"Collection IP":"10.6.12.14","Device":"R3.example.com","Device access labels":[],"Location":"Default","Management IP(s)":["10.6.12.14"],"Model":"IOL","OS":"IOS","OS Version":"15.7(3)M2","Status":"processed","Tags":[],"Type":"ROUTER","Vendor":"CISCO"},{"Collection IP":"10.6.12.23","Device":"vEOS24","Device access labels":[],"Location":"Default","Management IP(s)":["10.6.12.23"],"Model":"vEOS","OS":"ARISTA_EOS","OS Version":"4.25.2F","Status":"processed","Tags":[],"Type":"SWITCH","Vendor":"ARISTA"},{"Collection IP":"10.6.12.12","Device":"R1","Device access labels":[],"Location":"Default","Management IP(s)":["10.6.12.12"],"Model":"IOL","OS":"IOS","OS Version":"15.7(3)M2","Status":"processed","Tags":[],"Type":"ROUTER","Vendor":"CISCO"},{"Collection IP":"10.6.12.24","Device":"vEOS28","Device access labels":[],"Location":"Default","Management IP(s)":["10.6.12.24"],"Model":"vEOS","OS":"ARISTA_EOS","OS Version":"4.25.2F","Status":"processed","Tags":[],"Type":"SWITCH","Vendor":"ARISTA"},{"Collection IP":"10.6.12.17","Device":"R6.example.com","Device access labels":[],"Location":"Default","Management IP(s)":["10.6.12.17"],"Model":"IOL","OS":"IOS","OS Version":"15.7(3)M2","Status":"processed","Tags":[],"Type":"ROUTER","Vendor":"CISCO"}]}
+        
+        Would you like to:
+        1. Run a different predefined query?
+        2. Create a custom query?
+        3. Export these results?
+--- PASS: TestIntegrationRunNQEQuery (1.96s)
+=== RUN   TestIntegrationPathSearchSpecificCustomerIPs
+[INFO] 2025/07/15 11:43:59 Using instance ID '9cba3de5' for partitioning (based on https://fwd.app)
+[INFO] 2025/07/15 11:43:59 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:43:59 Using database directory: /Users/gary/.forward-mcp/data
+[INFO] 2025/07/15 11:43:59 Memory system initialized at: /Users/gary/.forward-mcp/data/memory.db
+[INFO] 2025/07/15 11:43:59 API memory tracker initialized for tracking API results and relationships
+[INFO] 2025/07/15 11:43:59 🔄 Database update callback registered for automatic query index refresh
+[INFO] 2025/07/15 11:43:59 🔄 Loading existing queries from database...
+[INFO] 2025/07/15 11:43:59 Loaded 3258 NQE queries into search index from database
+[INFO] 2025/07/15 11:43:59 🔄 Query index initialized with 3258 existing queries from database
+[INFO] 2025/07/15 11:43:59 💡 Tip: Run 'hydrate_database' with enhanced_mode for richer query metadata
+    integration_test.go:384: Testing path search on network: MULTICAST-DEMO (137847)
+=== RUN   TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_Basic
+    integration_test.go:481: 🔍 Testing: Basic path search with customer's specific source and destination IPs
+    integration_test.go:482:    Source IP: 10.6.142.197 → Destination IP: 10.5.0.130
+[INFO] 2025/07/15 11:44:00 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:44:00 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:517: ✅ Response for Customer_Specific_IPs_Basic:
+    integration_test.go:523:    Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.6.142.197 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:534:    📍 No paths found between 10.6.142.197 and 10.5.0.130 (this may be expected if IPs don't exist in topology)
+=== RUN   TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_With_Intent_PREFER_DELIVERED
+    integration_test.go:481: 🔍 Testing: Path search with PREFER_DELIVERED intent to prioritize successful paths
+    integration_test.go:482:    Source IP: 10.6.142.197 → Destination IP: 10.5.0.130
+[INFO] 2025/07/15 11:44:00 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:44:01 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:517: ✅ Response for Customer_Specific_IPs_With_Intent_PREFER_DELIVERED:
+    integration_test.go:523:    Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.6.142.197 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:534:    📍 No paths found between 10.6.142.197 and 10.5.0.130 (this may be expected if IPs don't exist in topology)
+=== RUN   TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_With_Functions
+    integration_test.go:481: 🔍 Testing: Path search including network functions for detailed hop-by-hop analysis
+    integration_test.go:482:    Source IP: 10.6.142.197 → Destination IP: 10.5.0.130
+[INFO] 2025/07/15 11:44:01 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:44:01 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:517: ✅ Response for Customer_Specific_IPs_With_Functions:
+    integration_test.go:523:    Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.6.142.197 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:534:    📍 No paths found between 10.6.142.197 and 10.5.0.130 (this may be expected if IPs don't exist in topology)
+    integration_test.go:552:    🔧 Network functions information included
+=== RUN   TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_TCP_443_HTTPS
+    integration_test.go:481: 🔍 Testing: Path search for HTTPS traffic (TCP port 443) between the specific IPs
+    integration_test.go:482:    Source IP: 10.6.142.197 → Destination IP: 10.5.0.130
+[INFO] 2025/07/15 11:44:01 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:44:02 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:517: ✅ Response for Customer_Specific_IPs_TCP_443_HTTPS:
+    integration_test.go:523:    Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.6.142.197 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:534:    📍 No paths found between 10.6.142.197 and 10.5.0.130 (this may be expected if IPs don't exist in topology)
+    integration_test.go:555:    🔒 HTTPS (TCP 443) specific test completed
+=== RUN   TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_TCP_80_HTTP
+    integration_test.go:481: 🔍 Testing: Path search for HTTP traffic (TCP port 80) between the specific IPs
+    integration_test.go:482:    Source IP: 10.6.142.197 → Destination IP: 10.5.0.130
+[INFO] 2025/07/15 11:44:02 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:44:02 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:517: ✅ Response for Customer_Specific_IPs_TCP_80_HTTP:
+    integration_test.go:523:    Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.6.142.197 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:534:    📍 No paths found between 10.6.142.197 and 10.5.0.130 (this may be expected if IPs don't exist in topology)
+    integration_test.go:557:    🌐 HTTP (TCP 80) specific test completed
+=== RUN   TestIntegrationPathSearchSpecificCustomerIPs/Customer_Reverse_Path
+    integration_test.go:481: 🔍 Testing: Reverse path search to test bidirectional connectivity
+    integration_test.go:482:    Source IP: 10.5.0.130 → Destination IP: 10.6.142.197
+[INFO] 2025/07/15 11:44:02 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:44:02 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:517: ✅ Response for Customer_Reverse_Path:
+    integration_test.go:523:    Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.5.0.130 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:534:    📍 No paths found between 10.5.0.130 and 10.6.142.197 (this may be expected if IPs don't exist in topology)
+=== RUN   TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_PREFER_VIOLATIONS
+    integration_test.go:481: 🔍 Testing: Path search with PREFER_VIOLATIONS to identify policy violations
+    integration_test.go:482:    Source IP: 10.6.142.197 → Destination IP: 10.5.0.130
+[INFO] 2025/07/15 11:44:03 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 137847
+[INFO] 2025/07/15 11:44:03 searchPaths - Using latest snapshot ID: 646025
+    integration_test.go:517: ✅ Response for Customer_Specific_IPs_PREFER_VIOLATIONS:
+    integration_test.go:523:    Path search completed. Found 0 paths:
+        ⚠️  Warning: No snapshot ID in response - this might indicate an issue
+        
+        ⚠️  Warning: Search time was 0ms - this suggests no real search occurred
+        
+        💡 No candidates found for source IP 10.6.142.197 - this IP might not exist in the network topology
+        
+        {"paths":null,"snapshotId":"","searchTimeMs":0,"numCandidatesFound":0}
+    integration_test.go:534:    📍 No paths found between 10.6.142.197 and 10.5.0.130 (this may be expected if IPs don't exist in topology)
+--- PASS: TestIntegrationPathSearchSpecificCustomerIPs (3.93s)
+    --- PASS: TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_Basic (0.60s)
+    --- PASS: TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_With_Intent_PREFER_DELIVERED (0.47s)
+    --- PASS: TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_With_Functions (0.48s)
+    --- PASS: TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_TCP_443_HTTPS (0.46s)
+    --- PASS: TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_TCP_80_HTTP (0.47s)
+    --- PASS: TestIntegrationPathSearchSpecificCustomerIPs/Customer_Reverse_Path (0.46s)
+    --- PASS: TestIntegrationPathSearchSpecificCustomerIPs/Customer_Specific_IPs_PREFER_VIOLATIONS (0.46s)
+=== RUN   TestIntegrationListDevices
+[INFO] 2025/07/15 11:44:03 Using instance ID '9cba3de5' for partitioning (based on https://fwd.app)
+[INFO] 2025/07/15 11:44:03 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:44:03 Using database directory: /Users/gary/.forward-mcp/data
+[INFO] 2025/07/15 11:44:03 Memory system initialized at: /Users/gary/.forward-mcp/data/memory.db
+[INFO] 2025/07/15 11:44:03 API memory tracker initialized for tracking API results and relationships
+[INFO] 2025/07/15 11:44:03 🔄 Database update callback registered for automatic query index refresh
+[INFO] 2025/07/15 11:44:03 🔄 Loading existing queries from database...
+[INFO] 2025/07/15 11:44:03 Loaded 3258 NQE queries into search index from database
+[INFO] 2025/07/15 11:44:03 🔄 Query index initialized with 3258 existing queries from database
+[INFO] 2025/07/15 11:44:03 💡 Tip: Run 'hydrate_database' with enhanced_mode for richer query metadata
+    integration_test.go:599: Devices response: Found 5 devices (total: 5):
+        {"devices":[{"name":"max-collector-001.local.forwardnetworks.com","type":"VSWITCH","vendor":"LINUX_GENERIC","platform":"linux_os","managementIps":["10.6.12.11"]},{"name":"R1","type":"ROUTER","vendor":"CISCO","osVersion":"15.7(3)M2","platform":"cisco_ios","model":"IOL","managementIps":["10.6.12.12"]},{"name":"R2","type":"ROUTER","vendor":"CISCO","osVersion":"15.7(3)M2","platform":"cisco_ios","model":"IOL","managementIps":["10.6.12.13"]},{"name":"R3.example.com","type":"ROUTER","vendor":"CISCO","osVersion":"15.7(3)M2","platform":"cisco_ios","model":"IOL","managementIps":["10.6.12.14"]},{"name":"R4.example.com","type":"ROUTER","vendor":"CISCO","osVersion":"15.7(3)M2","platform":"cisco_ios","model":"IOL","managementIps":["10.6.12.15"]}],"totalCount":5}
+--- PASS: TestIntegrationListDevices (0.77s)
+=== RUN   TestIntegrationListSnapshots
+[INFO] 2025/07/15 11:44:04 Using instance ID '9cba3de5' for partitioning (based on https://fwd.app)
+[INFO] 2025/07/15 11:44:04 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:44:04 Using database directory: /Users/gary/.forward-mcp/data
+[INFO] 2025/07/15 11:44:04 Memory system initialized at: /Users/gary/.forward-mcp/data/memory.db
+[INFO] 2025/07/15 11:44:04 API memory tracker initialized for tracking API results and relationships
+[INFO] 2025/07/15 11:44:04 🔄 Database update callback registered for automatic query index refresh
+[INFO] 2025/07/15 11:44:04 🔄 Loading existing queries from database...
+[INFO] 2025/07/15 11:44:04 Loaded 3258 NQE queries into search index from database
+[INFO] 2025/07/15 11:44:04 🔄 Query index initialized with 3258 existing queries from database
+[INFO] 2025/07/15 11:44:04 💡 Tip: Run 'hydrate_database' with enhanced_mode for richer query metadata
+    integration_test.go:633: Snapshots response: Found 120 snapshots:
+        [
+          {
+            "id": "653091",
+            "processingTrigger": "FORK",
+            "totalDevices": 13,
+            "creationDateMillis": 1694020680255,
+            "processedAtMillis": 1694020723156,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "646025",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 13,
+            "creationDateMillis": 1691609098879,
+            "processedAtMillis": 1750244696329,
+            "state": "PROCESSED"
+          },
+          {
+            "id": "494490",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1638230442252,
+            "processedAtMillis": 1689337159837,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "491194",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1635120043624,
+            "processedAtMillis": 1635120047219,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "491058",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1635033646308,
+            "processedAtMillis": 1635033650123,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "490922",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1634947245532,
+            "processedAtMillis": 1634947248314,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "490780",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1634860841405,
+            "processedAtMillis": 1634860844572,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "490634",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1634774443135,
+            "processedAtMillis": 1634774444252,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "490486",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1634688041395,
+            "processedAtMillis": 1634688045130,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "490370",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1634601669907,
+            "processedAtMillis": 1634601671573,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "490260",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1634515237993,
+            "processedAtMillis": 1634555920070,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "490125",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1634428844897,
+            "processedAtMillis": 1634651539955,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "489989",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1634342443813,
+            "processedAtMillis": 1634651572433,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "489839",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1634256044512,
+            "processedAtMillis": 1634651595851,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "489691",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1634169641483,
+            "processedAtMillis": 1634651619169,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "489549",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1634083236244,
+            "processedAtMillis": 1634651682617,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "489395",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633996845427,
+            "processedAtMillis": 1633996849368,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "489248",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633910442492,
+            "processedAtMillis": 1633910446391,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "489109",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633824045095,
+            "processedAtMillis": 1633824048176,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "488968",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633737639650,
+            "processedAtMillis": 1633737642704,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "488821",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633651242574,
+            "processedAtMillis": 1633651244826,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "488675",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633564842785,
+            "processedAtMillis": 1633564846944,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "488523",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633478450758,
+            "processedAtMillis": 1633478454175,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "488367",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633392046818,
+            "processedAtMillis": 1633392049946,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "488225",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633305644337,
+            "processedAtMillis": 1633305647071,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "488083",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633219234457,
+            "processedAtMillis": 1633219237105,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "487943",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633132837496,
+            "processedAtMillis": 1633132839532,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "487798",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1633046432989,
+            "processedAtMillis": 1633046435909,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "487644",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632960043174,
+            "processedAtMillis": 1632960044911,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "487502",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632873649545,
+            "processedAtMillis": 1632873651667,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "487358",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632787281247,
+            "processedAtMillis": 1632787284914,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "487211",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632700859954,
+            "processedAtMillis": 1632700860477,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "487070",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632614446611,
+            "processedAtMillis": 1632614450863,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "486925",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632528043577,
+            "processedAtMillis": 1632528046991,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "486781",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632441673043,
+            "processedAtMillis": 1632441706575,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "486626",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632355244474,
+            "processedAtMillis": 1632355248689,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "486476",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632268845759,
+            "processedAtMillis": 1632268848102,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "486328",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1632182436637,
+            "processedAtMillis": 1638905276373,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "486174",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632096044691,
+            "processedAtMillis": 1632096045528,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "486029",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1632009634121,
+            "processedAtMillis": 1632009637449,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "485891",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1631923243478,
+            "processedAtMillis": 1631923244514,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "485748",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1631836849496,
+            "processedAtMillis": 1631836851880,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "485639",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1631750475573,
+            "processedAtMillis": 1631750482954,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "485506",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1631664039955,
+            "processedAtMillis": 1631712609154,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "485438",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1631625967660,
+            "processedAtMillis": 1631820650367,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "485346",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1631577649287,
+            "processedAtMillis": 1631577653164,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "485184",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1631491244790,
+            "processedAtMillis": 1631820687588,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "485038",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1631404838607,
+            "processedAtMillis": 1631820724680,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "484896",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1631318442693,
+            "processedAtMillis": 1631820762288,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "484745",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1631232037915,
+            "processedAtMillis": 1631820808231,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "484589",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1631145640162,
+            "processedAtMillis": 1631145643542,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "484438",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1631059236668,
+            "processedAtMillis": 1631059238678,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "484353",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630972839779,
+            "processedAtMillis": 1630972843668,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "484270",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630886442320,
+            "processedAtMillis": 1630886445095,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "484191",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630800039973,
+            "processedAtMillis": 1630800043328,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "484113",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630713637426,
+            "processedAtMillis": 1630713639264,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "484020",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630627246424,
+            "processedAtMillis": 1630627247872,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483939",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630540849232,
+            "processedAtMillis": 1630540851627,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483859",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630454447549,
+            "processedAtMillis": 1630454451348,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483769",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630368043621,
+            "processedAtMillis": 1630368045947,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483672",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630281646022,
+            "processedAtMillis": 1630281649424,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483590",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630195243007,
+            "processedAtMillis": 1630195246424,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483508",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630108841558,
+            "processedAtMillis": 1630108845194,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483419",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1630022440003,
+            "processedAtMillis": 1630022443633,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483329",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629936044039,
+            "processedAtMillis": 1629936047770,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483236",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629849659765,
+            "processedAtMillis": 1629849663594,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483133",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629763245510,
+            "processedAtMillis": 1629763247794,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "483035",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629676839915,
+            "processedAtMillis": 1629676844358,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "482951",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629590443311,
+            "processedAtMillis": 1629590445522,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "482867",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629504041900,
+            "processedAtMillis": 1629504044664,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "482776",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629417663862,
+            "processedAtMillis": 1629417666559,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "482671",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629331243659,
+            "processedAtMillis": 1629331245488,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "482574",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629244852563,
+            "processedAtMillis": 1629244856167,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "482455",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629158478991,
+            "processedAtMillis": 1629158481284,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "482340",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1629072047684,
+            "processedAtMillis": 1629072050401,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "482186",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1628985640151,
+            "processedAtMillis": 1629072103819,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "482029",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1628899247962,
+            "processedAtMillis": 1629221547269,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "481863",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1628812841355,
+            "processedAtMillis": 1629221621175,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "481699",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1628726444010,
+            "processedAtMillis": 1629221684486,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "481660",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1628703566880,
+            "processedAtMillis": 1629221747214,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "480737",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1628208043427,
+            "processedAtMillis": 1628208044307,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "480576",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1628121646537,
+            "processedAtMillis": 1628121647212,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "480454",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1628035240893,
+            "processedAtMillis": 1628035243340,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "480350",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627948851732,
+            "processedAtMillis": 1627948852334,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "480236",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627862439520,
+            "processedAtMillis": 1627862440898,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "480142",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627776036419,
+            "processedAtMillis": 1627776038312,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "480046",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627689644659,
+            "processedAtMillis": 1627689647743,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "479933",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627603248742,
+            "processedAtMillis": 1627603250554,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "479760",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627516843698,
+            "processedAtMillis": 1627516845049,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "479567",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627430437983,
+            "processedAtMillis": 1627430440414,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "479382",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627344047263,
+            "processedAtMillis": 1627344050689,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "479207",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627257643056,
+            "processedAtMillis": 1627257646679,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "479059",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627171243922,
+            "processedAtMillis": 1627171246604,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "478911",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1627084852690,
+            "processedAtMillis": 1627084855588,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "478735",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1626998441187,
+            "processedAtMillis": 1626998443669,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "478553",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1626912072846,
+            "processedAtMillis": 1626912077946,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "478366",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1626825650847,
+            "processedAtMillis": 1626825653330,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "478201",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1626739244199,
+            "processedAtMillis": 1626739244955,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "478024",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1626652847024,
+            "processedAtMillis": 1626652849728,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "477888",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1626566444508,
+            "processedAtMillis": 1626566446377,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "477793",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1626480072833,
+            "processedAtMillis": 1626480075278,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "477628",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1626393654113,
+            "processedAtMillis": 1626446662489,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "477457",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1626307245241,
+            "processedAtMillis": 1626561613795,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "477407",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1626283082139,
+            "processedAtMillis": 1626561674951,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "471734",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1623182485589,
+            "processedAtMillis": 1623928031796,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "471731",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1623181843491,
+            "processedAtMillis": 1623181843766,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "470426",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1622645593876,
+            "processedAtMillis": 1622645596886,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "469400",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1622223866828,
+            "processedAtMillis": 1622223870642,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "469145",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1622119374335,
+            "processedAtMillis": 1622119377930,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "468935",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1622054567363,
+            "processedAtMillis": 1622054571254,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "468501",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1621886949936,
+            "processedAtMillis": 1621886953014,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "461991",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1619880071628,
+            "processedAtMillis": 1647360039228,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "459951",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1619442704265,
+            "processedAtMillis": 1619442708016,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "444352",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1616015755974,
+            "processedAtMillis": 1618511527260,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "444016",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1615936873238,
+            "processedAtMillis": 1615936876865,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "444015",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1615936665752,
+            "processedAtMillis": 1615936669426,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "444014",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1615936630306,
+            "processedAtMillis": 1615936634438,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "444012",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1615936464761,
+            "processedAtMillis": 1618419256737,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "443978",
+            "processingTrigger": "COLLECTION",
+            "totalDevices": 7,
+            "creationDateMillis": 1615931326675,
+            "processedAtMillis": 1615931329806,
+            "state": "UNPROCESSED"
+          },
+          {
+            "id": "441371",
+            "processingTrigger": "REPROCESS",
+            "totalDevices": 7,
+            "creationDateMillis": 1613571839738,
+            "processedAtMillis": 1620318630603,
+            "state": "UNPROCESSED"
+          }
+        ]
+--- PASS: TestIntegrationListSnapshots (0.77s)
+=== RUN   TestListNetworks
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestListNetworks (0.00s)
+=== RUN   TestCreateNetwork
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestCreateNetwork (0.00s)
+=== RUN   TestDeleteNetwork
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestDeleteNetwork (0.00s)
+=== RUN   TestSearchPaths
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:44:05 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 162112
+[INFO] 2025/07/15 11:44:05 searchPaths - Using latest snapshot ID: snapshot-123
+--- PASS: TestSearchPaths (0.00s)
+=== RUN   TestRunNQEQuery
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID FQ_test_query_id not found in database index - may be deprecated or invalid
+    mcp_service_test.go:533: Actual response content: NQE query completed. Found 2 items:
+        {"snapshotId":"snapshot-123","items":[{"device_name":"router-1","platform":"Cisco IOS"},{"device_name":"switch-1","platform":"Cisco NX-OS"}]}
+        
+        Would you like to:
+        1. Run a different predefined query?
+        2. Create a custom query?
+        3. Export these results?
+--- PASS: TestRunNQEQuery (0.00s)
+=== RUN   TestRunNQEQueryByID
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestRunNQEQueryByID (0.00s)
+=== RUN   TestListNQEQueries
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestListNQEQueries (0.00s)
+=== RUN   TestListDevices
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestListDevices (0.00s)
+=== RUN   TestGetDeviceLocations
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestGetDeviceLocations (0.00s)
+=== RUN   TestErrorHandling
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestErrorHandling (0.00s)
+=== RUN   TestMCPIntegration
+--- PASS: TestMCPIntegration (0.00s)
+=== RUN   TestRegisterToolsComprehensive
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+=== RUN   TestRegisterToolsComprehensive/list_networks
+=== RUN   TestRegisterToolsComprehensive/create_network
+=== RUN   TestRegisterToolsComprehensive/update_network
+=== RUN   TestRegisterToolsComprehensive/search_paths
+[INFO] 2025/07/15 11:44:05 searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network 162112
+[INFO] 2025/07/15 11:44:05 searchPaths - Using latest snapshot ID: snapshot-123
+=== RUN   TestRegisterToolsComprehensive/run_nqe_query
+=== RUN   TestRegisterToolsComprehensive/list_nqe_queries
+=== RUN   TestRegisterToolsComprehensive/list_devices
+=== RUN   TestRegisterToolsComprehensive/get_device_locations
+=== RUN   TestRegisterToolsComprehensive/list_snapshots
+=== RUN   TestRegisterToolsComprehensive/get_latest_snapshot
+=== RUN   TestRegisterToolsComprehensive/list_locations
+=== RUN   TestRegisterToolsComprehensive/create_location
+=== RUN   TestRegisterToolsComprehensive/get_device_basic_info
+=== RUN   TestRegisterToolsComprehensive/get_device_hardware
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID FQ_7ec4a8148b48a91271f342c512b2af1cdb276744 not found in database index - may be deprecated or invalid
+=== RUN   TestRegisterToolsComprehensive/get_hardware_support
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID FQ_f0984b777b940b4376ed3ec4317ad47437426e7c not found in database index - may be deprecated or invalid
+=== RUN   TestRegisterToolsComprehensive/get_os_support
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID FQ_fc33d9fd70ba19a18455b0e4d26ca8420003d9cc not found in database index - may be deprecated or invalid
+=== RUN   TestRegisterToolsComprehensive/search_configs
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID FQ_e636c47826ad7144f09eaf6bc14dfb0b560e7cc9 not found in database index - may be deprecated or invalid
+=== RUN   TestRegisterToolsComprehensive/get_config_diff
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID FQ_51f090cbea069b4049eb283716ab3bbb3f578aea not found in database index - may be deprecated or invalid
+=== RUN   TestRegisterToolsComprehensive/get_default_settings
+=== RUN   TestRegisterToolsComprehensive/set_default_network
+=== RUN   TestRegisterToolsComprehensive/get_cache_stats
+=== RUN   TestRegisterToolsComprehensive/clear_cache
+=== RUN   TestRegisterToolsComprehensive/suggest_similar_queries
+--- PASS: TestRegisterToolsComprehensive (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/list_networks (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/create_network (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/update_network (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/search_paths (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/run_nqe_query (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/list_nqe_queries (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/list_devices (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/get_device_locations (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/list_snapshots (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/get_latest_snapshot (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/list_locations (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/create_location (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/get_device_basic_info (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/get_device_hardware (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/get_hardware_support (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/get_os_support (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/search_configs (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/get_config_diff (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/get_default_settings (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/set_default_network (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/get_cache_stats (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/clear_cache (0.00s)
+    --- PASS: TestRegisterToolsComprehensive/suggest_similar_queries (0.00s)
+=== RUN   TestCacheIntegrationWithNQEQueries
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+=== RUN   TestCacheIntegrationWithNQEQueries/cache_miss_then_api_call
+=== RUN   TestCacheIntegrationWithNQEQueries/cache_hit_second_execution
+=== RUN   TestCacheIntegrationWithNQEQueries/different_parameters_cache_miss
+=== RUN   TestCacheIntegrationWithNQEQueries/cache_with_custom_parameters
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID FQ_different_query not found in database index - may be deprecated or invalid
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID FQ_different_query not found in database index - may be deprecated or invalid
+--- PASS: TestCacheIntegrationWithNQEQueries (0.00s)
+    --- PASS: TestCacheIntegrationWithNQEQueries/cache_miss_then_api_call (0.00s)
+    --- PASS: TestCacheIntegrationWithNQEQueries/cache_hit_second_execution (0.00s)
+    --- PASS: TestCacheIntegrationWithNQEQueries/different_parameters_cache_miss (0.00s)
+    --- PASS: TestCacheIntegrationWithNQEQueries/cache_with_custom_parameters (0.00s)
+=== RUN   TestCacheMetricsAndMonitoring
+[INFO] 2025/07/15 11:44:05 Using instance ID 'default' for partitioning (based on )
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 10MB, Compression: true
+[INFO] 2025/07/15 11:44:05 Using database directory: /Users/gary/.forward-mcp/data
+[INFO] 2025/07/15 11:44:05 Memory system initialized at: /Users/gary/.forward-mcp/data/memory.db
+[INFO] 2025/07/15 11:44:05 API memory tracker initialized for tracking API results and relationships
+[INFO] 2025/07/15 11:44:05 🔄 Database update callback registered for automatic query index refresh
+[INFO] 2025/07/15 11:44:05 🔄 Loading existing queries from database...
+[INFO] 2025/07/15 11:44:05 🔄 Database is empty, initializing from spec file...
+[INFO] 2025/07/15 11:44:05 Loaded 1879 NQE queries into search index
+[INFO] 2025/07/15 11:44:05 Loaded 1879 cached embeddings for offline AI search
+[INFO] 2025/07/15 11:44:05 🔄 Query index initialized from spec file
+[INFO] 2025/07/15 11:44:05 💡 Tip: Run 'hydrate_database' to populate with live data from API
+=== RUN   TestCacheMetricsAndMonitoring/get_cache_stats
+=== RUN   TestCacheMetricsAndMonitoring/clear_cache_expired
+--- PASS: TestCacheMetricsAndMonitoring (0.23s)
+    --- PASS: TestCacheMetricsAndMonitoring/get_cache_stats (0.00s)
+    --- PASS: TestCacheMetricsAndMonitoring/clear_cache_expired (0.01s)
+=== RUN   TestCacheCompressionFeatures
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+    mcp_service_test.go:1268: Compression ratio for large result: 0.019
+--- PASS: TestCacheCompressionFeatures (0.00s)
+=== RUN   TestCacheEvictionPolicies
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID query-1 not found in database index - may be deprecated or invalid
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID query-2 not found in database index - may be deprecated or invalid
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID query-3 not found in database index - may be deprecated or invalid
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID query-4 not found in database index - may be deprecated or invalid
+    mcp_service_test.go:1311: Final entries: 3, Evicted: 1
+--- PASS: TestCacheEvictionPolicies (0.00s)
+=== RUN   TestCacheErrorHandling
+[INFO] 2025/07/15 11:44:05 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID error-query not found in database index - may be deprecated or invalid
+[INFO] 2025/07/15 11:44:05 [ERROR] Tool run_nqe_query_by_id failed (duration: 0s): API error
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID error-query not found in database index - may be deprecated or invalid
+[INFO] 2025/07/15 11:44:05 [WARN] Query ID error-query not found in database index - may be deprecated or invalid
+--- PASS: TestCacheErrorHandling (0.00s)
+=== RUN   TestNewMemorySystem
+--- PASS: TestNewMemorySystem (0.07s)
+=== RUN   TestCreateEntity
+--- PASS: TestCreateEntity (0.07s)
+=== RUN   TestCreateRelation
+--- PASS: TestCreateRelation (0.08s)
+=== RUN   TestAddObservation
+--- PASS: TestAddObservation (0.08s)
+=== RUN   TestSearchEntities
+--- PASS: TestSearchEntities (0.12s)
+=== RUN   TestGetEntity
+--- PASS: TestGetEntity (0.07s)
+=== RUN   TestGetRelations
+--- PASS: TestGetRelations (0.11s)
+=== RUN   TestGetObservations
+--- PASS: TestGetObservations (0.08s)
+=== RUN   TestDeleteEntity
+--- PASS: TestDeleteEntity (0.11s)
+=== RUN   TestDeleteRelation
+--- PASS: TestDeleteRelation (0.11s)
+=== RUN   TestDeleteObservation
+--- PASS: TestDeleteObservation (0.10s)
+=== RUN   TestGetMemoryStats
+--- PASS: TestGetMemoryStats (0.12s)
+=== RUN   TestMemorySystemClose
+--- PASS: TestMemorySystemClose (0.06s)
+=== RUN   TestSemanticCache
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+=== RUN   TestSemanticCache/basic_put_and_get
+=== RUN   TestSemanticCache/semantic_similarity_match
+    semantic_cache_test.go:84: No semantic match found (depends on mock embedding similarity)
+=== RUN   TestSemanticCache/network_isolation
+=== RUN   TestSemanticCache/ttl_expiration
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+=== RUN   TestSemanticCache/eviction_policy
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestSemanticCache (0.01s)
+    --- PASS: TestSemanticCache/basic_put_and_get (0.00s)
+    --- PASS: TestSemanticCache/semantic_similarity_match (0.00s)
+    --- PASS: TestSemanticCache/network_isolation (0.00s)
+    --- PASS: TestSemanticCache/ttl_expiration (0.01s)
+    --- PASS: TestSemanticCache/eviction_policy (0.00s)
+=== RUN   TestEnhancedEvictionPolicies
+=== RUN   TestEnhancedEvictionPolicies/lru_eviction
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 10MB, Compression: false
+    semantic_cache_test.go:211: Final cache size after LRU eviction: 3
+=== RUN   TestEnhancedEvictionPolicies/lfu_eviction
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lfu, MaxMemory: 10MB, Compression: false
+    semantic_cache_test.go:253: Final cache size after LFU eviction: 3
+=== RUN   TestEnhancedEvictionPolicies/size_based_eviction
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: size, MaxMemory: 1MB, Compression: false
+    semantic_cache_test.go:297: No eviction occurred yet, memory limit might not be reached
+--- PASS: TestEnhancedEvictionPolicies (0.00s)
+    --- PASS: TestEnhancedEvictionPolicies/lru_eviction (0.00s)
+    --- PASS: TestEnhancedEvictionPolicies/lfu_eviction (0.00s)
+    --- PASS: TestEnhancedEvictionPolicies/size_based_eviction (0.00s)
+=== RUN   TestCompressionFeatures
+=== RUN   TestCompressionFeatures/compression_enabled
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: , MaxMemory: 10MB, Compression: true
+    semantic_cache_test.go:345: Compression ratio is 0.000; data may not be compressible. Accepting as valid.
+    semantic_cache_test.go:350: Compression ratio: 0.000
+=== RUN   TestCompressionFeatures/compression_disabled
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: , MaxMemory: 10MB, Compression: false
+--- PASS: TestCompressionFeatures (0.00s)
+    --- PASS: TestCompressionFeatures/compression_enabled (0.00s)
+    --- PASS: TestCompressionFeatures/compression_disabled (0.00s)
+=== RUN   TestMemoryManagement
+=== RUN   TestMemoryManagement/memory_tracking
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: , MaxMemory: 1MB, Compression: false
+    semantic_cache_test.go:419: Memory usage: 62880 bytes (0.06 MB)
+=== RUN   TestMemoryManagement/memory_limit_enforcement
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 1MB, Compression: false
+    semantic_cache_test.go:461: Initial entries: 20, Final entries: 20, Evicted: 0
+--- PASS: TestMemoryManagement (0.00s)
+    --- PASS: TestMemoryManagement/memory_tracking (0.00s)
+    --- PASS: TestMemoryManagement/memory_limit_enforcement (0.00s)
+=== RUN   TestEnhancedMetrics
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 10MB, Compression: true
+    semantic_cache_test.go:528: Enhanced metrics test passed. Sample metrics: map[avg_response_time_ms:0.01 cache_hits:2 cache_misses:0 cleanup_interval_min:1 compression_enabled:true compression_ratio:1.169 current_memory_mb:0.024045944213867188 disk_cache_path: evicted_count:0 eviction_policy:lru evictions_by_policy:map[] hit_rate_percent:100.00 last_cleanup:0001-01-01 00:00:00 +0000 UTC max_entries:10 max_memory_mb:10 memory_threshold_%:80 memory_usage_bytes:25214 memory_utilization_%:0.24 persistence_enabled:false threshold:0 total_entries:2 total_queries:2 ttl_hours:24]
+--- PASS: TestEnhancedMetrics (0.00s)
+=== RUN   TestCacheConfiguration
+=== RUN   TestCacheConfiguration/default_configuration
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+=== RUN   TestCacheConfiguration/custom_configuration
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lfu, MaxMemory: 256MB, Compression: false
+--- PASS: TestCacheConfiguration (0.00s)
+    --- PASS: TestCacheConfiguration/default_configuration (0.00s)
+    --- PASS: TestCacheConfiguration/custom_configuration (0.00s)
+=== RUN   TestSemanticCacheStats
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestSemanticCacheStats (0.00s)
+=== RUN   TestSemanticCacheSimilarQueries
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+    semantic_cache_test.go:679: Found 0 similar queries for unrelated query
+--- PASS: TestSemanticCacheSimilarQueries (0.00s)
+=== RUN   TestSemanticCacheClearExpired
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestSemanticCacheClearExpired (0.01s)
+=== RUN   TestMockEmbeddingService
+--- PASS: TestMockEmbeddingService (0.00s)
+=== RUN   TestSearchNQEQueries_AutoInitialization
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestSearchNQEQueries_AutoInitialization (0.00s)
+=== RUN   TestSearchNQEQueries_EmptyQuery
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestSearchNQEQueries_EmptyQuery (0.00s)
+=== RUN   TestSearchNQEQueries_Parameters
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+=== RUN   TestSearchNQEQueries_Parameters/Basic_query
+=== RUN   TestSearchNQEQueries_Parameters/Query_with_category_filter
+=== RUN   TestSearchNQEQueries_Parameters/Query_with_subcategory_filter
+=== RUN   TestSearchNQEQueries_Parameters/Query_with_code_inclusion
+--- PASS: TestSearchNQEQueries_Parameters (0.00s)
+    --- PASS: TestSearchNQEQueries_Parameters/Basic_query (0.00s)
+    --- PASS: TestSearchNQEQueries_Parameters/Query_with_category_filter (0.00s)
+    --- PASS: TestSearchNQEQueries_Parameters/Query_with_subcategory_filter (0.00s)
+    --- PASS: TestSearchNQEQueries_Parameters/Query_with_code_inclusion (0.00s)
+=== RUN   TestFindExecutableQuery_AutoInitialization
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestFindExecutableQuery_AutoInitialization (0.00s)
+=== RUN   TestFindExecutableQuery_EmptyQuery
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestFindExecutableQuery_EmptyQuery (0.00s)
+=== RUN   TestFindExecutableQuery_Parameters
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+=== RUN   TestFindExecutableQuery_Parameters/Device_information_query
+=== RUN   TestFindExecutableQuery_Parameters/Hardware_query
+=== RUN   TestFindExecutableQuery_Parameters/Query_with_related_matches
+=== RUN   TestFindExecutableQuery_Parameters/Configuration_search_query
+--- PASS: TestFindExecutableQuery_Parameters (0.00s)
+    --- PASS: TestFindExecutableQuery_Parameters/Device_information_query (0.00s)
+    --- PASS: TestFindExecutableQuery_Parameters/Hardware_query (0.00s)
+    --- PASS: TestFindExecutableQuery_Parameters/Query_with_related_matches (0.00s)
+    --- PASS: TestFindExecutableQuery_Parameters/Configuration_search_query (0.00s)
+=== RUN   TestExecutableQueryMapping
+--- PASS: TestExecutableQueryMapping (0.00s)
+=== RUN   TestGetExecutableQueries
+--- PASS: TestGetExecutableQueries (0.00s)
+=== RUN   TestInitializeQueryIndex
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+[INFO] 2025/07/15 11:44:06 Loaded 1879 NQE queries into search index
+[INFO] 2025/07/15 11:44:06 Loaded 1879 cached embeddings for offline AI search
+--- PASS: TestInitializeQueryIndex (0.10s)
+=== RUN   TestGetQueryIndexStats
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestGetQueryIndexStats (0.00s)
+=== RUN   TestGetQueryIndexStats_Detailed
+[INFO] 2025/07/15 11:44:06 Enhanced semantic cache initialized - Policy: lru, MaxMemory: 512MB, Compression: true
+--- PASS: TestGetQueryIndexStats_Detailed (0.00s)
+=== RUN   TestKeywordEmbeddingService_SmartSearch
+--- PASS: TestKeywordEmbeddingService_SmartSearch (0.00s)
+PASS
+ok  	github.com/forward-mcp/internal/service	16.808s

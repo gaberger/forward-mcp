@@ -289,6 +289,7 @@ func (sc *SemanticCache) Get(query, networkID, snapshotID string) (*forward.NQER
 	sc.mutex.RLock()
 	defer sc.mutex.RUnlock()
 
+	// Only increment TotalQueries once per Get call
 	sc.metrics.TotalQueries++
 
 	// First try exact match
@@ -404,7 +405,7 @@ func (sc *SemanticCache) Put(query, networkID, snapshotID string, result *forwar
 			entry.UncompressedSize = originalSize
 			entry.Result = nil // Clear uncompressed data to save memory
 
-			// Update compression metrics
+			// Update compression metrics (always update, even if ratio is 0)
 			if sc.metricsEnabled && originalSize > 0 {
 				ratio := float64(entry.CompressedSize) / float64(originalSize)
 				sc.metrics.CompressionRatio = (sc.metrics.CompressionRatio + ratio) / 2
@@ -436,6 +437,12 @@ func (sc *SemanticCache) Put(query, networkID, snapshotID string, result *forwar
 
 	sc.logger.Debug("CACHE PUT: Stored result for query: %s (compressed: %v, size: %dB->%dB)",
 		truncateString(query, 50), entry.IsCompressed, entry.UncompressedSize, entry.CompressedSize)
+
+	// Strictly enforce maxEntries after insertion
+	for len(sc.entries) > sc.maxEntries {
+		sc.logger.Debug("Strict maxEntries enforcement: evicting to maintain limit (%d/%d)", len(sc.entries), sc.maxEntries)
+		sc.evictEntriesByPolicy(1)
+	}
 
 	return nil
 }
@@ -478,13 +485,13 @@ func (sc *SemanticCache) evictOldest() {
 		return
 	}
 
-	// Find oldest entry
+	// Find oldest entry by creation time (Timestamp)
 	var oldestKey string
 	var oldestTime time.Time = time.Now()
 
 	for key, entry := range sc.entries {
-		if entry.LastAccessed.Before(oldestTime) {
-			oldestTime = entry.LastAccessed
+		if entry.Timestamp.Before(oldestTime) {
+			oldestTime = entry.Timestamp
 			oldestKey = key
 		}
 	}
@@ -559,10 +566,12 @@ func (sc *SemanticCache) evictLeastFrequent() {
 
 	var lfuKey string
 	var minAccessCount int64 = -1
+	var oldestTime time.Time = time.Now()
 
 	for key, entry := range sc.entries {
-		if minAccessCount == -1 || entry.AccessCount < minAccessCount {
+		if minAccessCount == -1 || entry.AccessCount < minAccessCount || (entry.AccessCount == minAccessCount && entry.Timestamp.Before(oldestTime)) {
 			minAccessCount = entry.AccessCount
+			oldestTime = entry.Timestamp
 			lfuKey = key
 		}
 	}

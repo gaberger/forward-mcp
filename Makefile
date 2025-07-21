@@ -18,7 +18,7 @@ LDFLAGS=-ldflags "-s -w"
 # CGO must be enabled for SQLite database functionality
 CGO_ENABLED=1
 
-.PHONY: all build build-test-client test test-integration test-coverage clean run run-test-client dev deps embedding-status embedding-generate-keyword embedding-generate-openai embedding-cache-info embedding-benchmark embedding-clean database-status test-database test-metadata test-enhanced database-clean metadata-stats test-semantic-search demo-smart-search test-path-search-integration test-path-search-mcp lint
+.PHONY: all build build-test-client test test-quick test-integration test-all test-coverage test-coverage-all clean run run-test-client dev deps embedding-status embedding-generate-keyword embedding-generate-openai embedding-cache-info embedding-benchmark embedding-clean database-status test-database test-metadata test-enhanced database-clean metadata-stats test-semantic-search demo-smart-search test-path-search-integration test-path-search-mcp lint
 
 all: test build
 
@@ -34,20 +34,44 @@ build-test-client:
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) -o $(BUILD_DIR)/$(TEST_CLIENT) $(TEST_CLIENT_FILE)
 
-# Run unit tests
+# Run unit tests (excludes integration tests to prevent hanging)
 test:
-	@echo "Running tests..."
-	$(GOTEST) -v ./internal/... ./cmd/... ./pkg/...
+	@echo "Running unit tests (excluding integration tests)..."
+	@echo "💡 Integration tests are excluded to prevent hanging on slow API calls"
+	@echo "💡 Use 'make test-integration' to run integration tests separately"
+	$(GOTEST) -v -timeout=60s ./internal/... ./cmd/... ./pkg/... -skip 'TestIntegration'
 
-# Run integration tests
+# Run unit tests quickly (no verbose output)
+test-quick:
+	@echo "Running unit tests quickly (no verbose output)..."
+	$(GOTEST) -timeout=60s ./internal/... ./cmd/... ./pkg/... -skip 'TestIntegration'
+
+# Run integration tests with timeout
 test-integration:
-	@echo "Running integration tests..."
-	$(GOTEST) -v ./internal/... ./cmd/... ./pkg/... -tags=integration
+	@echo "Running integration tests (with 60s timeout)..."
+	@echo "⚠️  These tests make real API calls and may take time"
+	@echo "💡 Ensure your .env file is configured with valid Forward API credentials"
+	$(GOTEST) -v -timeout=60s ./internal/... ./cmd/... ./pkg/... -run 'TestIntegration'
 
-# Run test coverage
+# Run all tests (unit + integration) with extended timeout
+test-all:
+	@echo "Running all tests (unit + integration) with extended timeout..."
+	@echo "⚠️  This includes integration tests that make real API calls"
+	$(GOTEST) -v -timeout=120s ./internal/... ./cmd/... ./pkg/...
+
+# Run test coverage (excludes integration tests)
 test-coverage:
-	@echo "Running test coverage..."
-	$(GOTEST) -v ./internal/... ./cmd/... ./pkg/... -coverprofile=coverage.out
+	@echo "Running test coverage (excluding integration tests)..."
+	@echo "💡 Integration tests are excluded to prevent hanging on slow API calls"
+	$(GOTEST) -v -timeout=60s ./internal/... ./cmd/... ./pkg/... -skip 'TestIntegration' -coverprofile=coverage.out
+	$(GOCMD) tool cover -html=coverage.out -o coverage.html
+	@echo "Coverage report generated: coverage.html"
+
+# Run test coverage with integration tests
+test-coverage-all:
+	@echo "Running test coverage (including integration tests)..."
+	@echo "⚠️  This includes integration tests that make real API calls"
+	$(GOTEST) -v -timeout=120s ./internal/... ./cmd/... ./pkg/... -coverprofile=coverage.out
 	$(GOCMD) tool cover -html=coverage.out -o coverage.html
 	@echo "Coverage report generated: coverage.html"
 

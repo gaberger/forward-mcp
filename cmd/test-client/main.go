@@ -196,6 +196,15 @@ func main() {
 				"max_results": 3,
 			},
 		},
+		{
+			name:        "hydrate_database",
+			description: "Hydrate database with enhanced metadata",
+			tool:        "hydrate_database",
+			args: map[string]interface{}{
+				"enhanced_mode": true,
+				"force_refresh": true,
+			},
+		},
 	}
 
 	// Print available commands

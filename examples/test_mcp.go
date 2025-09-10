@@ -95,7 +95,7 @@ func main() {
 	// Example 1: Basic device query
 	nqeArgs1 := service.RunNQEQueryByStringArgs{
 		NetworkID: "network-123",
-		Query:     "foreach device in network.devices select {deviceName: device.name, platform: device.platform}",
+		Query:     "foreach device in network.devices select {Name: device.name, Platform: device.platform}",
 		Options: &service.NQEQueryOptions{
 			Limit: 10,
 		},
@@ -107,7 +107,7 @@ func main() {
 	// Example 2: Interface query with filtering
 	nqeArgs2 := service.RunNQEQueryByStringArgs{
 		NetworkID: "network-123",
-		Query:     "foreach interface in network.interfaces where interface.operStatus == 'up' select {deviceName: interface.device.name, interfaceName: interface.name, ipAddress: interface.ipv4Address}",
+		Query:     "foreach interface in network.interfaces where interface.operStatus == 'up' select {DeviceName: interface.device.name, InterfaceName: interface.name, IPAddress: interface.ipv4Address}",
 		Options: &service.NQEQueryOptions{
 			Limit: 20,
 		},
@@ -119,7 +119,7 @@ func main() {
 	// Example 3: Routing table query
 	nqeArgs3 := service.RunNQEQueryByStringArgs{
 		NetworkID: "network-123",
-		Query:     "foreach route in network.routes where route.protocol == 'ospf' select {deviceName: route.device.name, prefix: route.prefix, nextHop: route.nextHop, metric: route.metric}",
+		Query:     "foreach route in network.routes where route.protocol == 'ospf' select {DeviceName: route.device.name, Prefix: route.prefix, NextHop: route.nextHop, Metric: route.metric}",
 		Options: &service.NQEQueryOptions{
 			Limit: 50,
 		},

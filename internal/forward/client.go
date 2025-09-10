@@ -34,7 +34,7 @@ type ClientInterface interface {
 
 	// Path Search operations
 	SearchPaths(networkID string, params *PathSearchParams) (*PathSearchResponse, error)
-	SearchPathsBulk(networkID string, requests []PathSearchParams) ([]PathSearchResponse, error)
+	SearchPathsBulk(networkID string, request *PathSearchBulkRequest, snapshotID string) ([]PathSearchBulkResponse, error)
 
 	// NQE operations
 	RunNQEQueryByString(params *NQEQueryParams) (*NQERunResult, error)
@@ -162,6 +162,19 @@ type PathSearchParams struct {
 	SnapshotID              string `json:"snapshotId,omitempty"`
 }
 
+// PathSearchBulkRequest represents the request body for bulk path search
+type PathSearchBulkRequest struct {
+	Queries                 []PathSearchParams `json:"queries"`
+	Intent                  string             `json:"intent,omitempty"`
+	MaxCandidates           int                `json:"maxCandidates,omitempty"`
+	MaxResults              int                `json:"maxResults,omitempty"`
+	MaxReturnPathResults    int                `json:"maxReturnPathResults,omitempty"`
+	MaxSeconds              int                `json:"maxSeconds,omitempty"`
+	MaxOverallSeconds       int                `json:"maxOverallSeconds,omitempty"`
+	IncludeNetworkFunctions bool               `json:"includeNetworkFunctions,omitempty"`
+}
+
+// PathSearchResponse represents the response from single path search
 type PathSearchResponse struct {
 	Paths              []Path                 `json:"paths"`
 	ReturnPaths        []Path                 `json:"returnPaths,omitempty"`
@@ -171,6 +184,40 @@ type PathSearchResponse struct {
 	NumCandidatesFound int                    `json:"numCandidatesFound"`
 }
 
+// PathSearchBulkResponse represents the response from bulk path search
+type PathSearchBulkResponse struct {
+	DstIpLocationType string         `json:"dstIpLocationType"`
+	Info              PathSearchInfo `json:"info"`
+	ReturnPathInfo    PathSearchInfo `json:"returnPathInfo"`
+	TimedOut          bool           `json:"timedOut"`
+	QueryUrl          string         `json:"queryUrl"`
+}
+
+type PathSearchInfo struct {
+	Paths     []BulkPath `json:"paths"`
+	TotalHits TotalHits  `json:"totalHits"`
+}
+
+type TotalHits struct {
+	Value int    `json:"value"`
+	Type  string `json:"type"`
+}
+
+type BulkPath struct {
+	ForwardingOutcome string    `json:"forwardingOutcome"`
+	SecurityOutcome   string    `json:"securityOutcome"`
+	Hops              []BulkHop `json:"hops"`
+}
+
+type BulkHop struct {
+	DeviceName       string   `json:"deviceName"`
+	DeviceType       string   `json:"deviceType"`
+	IngressInterface string   `json:"ingressInterface"`
+	EgressInterface  string   `json:"egressInterface"`
+	Behaviors        []string `json:"behaviors"`
+}
+
+// Legacy types for backward compatibility with single path search
 type Path struct {
 	Hops        []Hop  `json:"hops"`
 	Outcome     string `json:"outcome"`
@@ -669,18 +716,34 @@ func (c *Client) SearchPaths(networkID string, params *PathSearchParams) (*PathS
 	return &pathResp, nil
 }
 
-func (c *Client) SearchPathsBulk(networkID string, requests []PathSearchParams) ([]PathSearchResponse, error) {
+func (c *Client) SearchPathsBulk(networkID string, request *PathSearchBulkRequest, snapshotID string) ([]PathSearchBulkResponse, error) {
 	endpoint := fmt.Sprintf("/api/networks/%s/paths-bulk", networkID)
 
-	resp, err := c.makeRequest("POST", endpoint, requests)
+	// Add snapshotId as query parameter if provided (optional for bulk API)
+	if snapshotID != "" && snapshotID != "latest" {
+		endpoint += fmt.Sprintf("?snapshotId=%s", snapshotID)
+	}
+
+	// Debug logging
+	debugLogger := logger.New()
+	debugLogger.Debug("SearchPathsBulk - URL: %s, snapshotID: %s", endpoint, snapshotID)
+
+	resp, err := c.makeRequest("POST", endpoint, request)
 	if err != nil {
 		return nil, err
 	}
 	defer resp.Body.Close()
 
-	var responses []PathSearchResponse
+	var responses []PathSearchBulkResponse
 	if err := json.NewDecoder(resp.Body).Decode(&responses); err != nil {
 		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+
+	// Debug logging
+	bulkLogger := logger.New()
+	bulkLogger.Debug("SearchPathsBulk decoded %d responses", len(responses))
+	if len(responses) > 0 {
+		bulkLogger.Debug("First response: %+v", responses[0])
 	}
 
 	return responses, nil

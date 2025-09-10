@@ -20,21 +20,6 @@ type UpdateNetworkArgs struct {
 	Description string `json:"description,omitempty" jsonschema:"description=New description for the network"`
 }
 
-// Path Search Tool Arguments
-type SearchPathsArgs struct {
-	NetworkID               string `json:"network_id" jsonschema:"required,description=ID of the network to search paths in"`
-	DstIP                   string `json:"dst_ip" jsonschema:"required,description=Destination IP address or subnet"`
-	SrcIP                   string `json:"src_ip,omitempty" jsonschema:"description=Source IP address or subnet"`
-	From                    string `json:"from,omitempty" jsonschema:"description=Device from which traffic originates"`
-	Intent                  string `json:"intent,omitempty" jsonschema:"description=Search intent,enum=PREFER_DELIVERED|PREFER_VIOLATIONS|VIOLATIONS_ONLY"`
-	IPProto                 int    `json:"ip_proto,omitempty" jsonschema:"description=IP protocol number"`
-	SrcPort                 string `json:"src_port,omitempty" jsonschema:"description=Source port (e.g. '80' or '8080-8088')"`
-	DstPort                 string `json:"dst_port,omitempty" jsonschema:"description=Destination port (e.g. '80' or '8080-8088')"`
-	MaxResults              int    `json:"max_results,omitempty" jsonschema:"description=Maximum number of results to return (default: 1)"`
-	IncludeNetworkFunctions bool   `json:"include_network_functions,omitempty" jsonschema:"description=Include detailed forwarding info for each hop"`
-	SnapshotID              string `json:"snapshot_id,omitempty" jsonschema:"description=Specific snapshot ID to use (optional)"`
-}
-
 // NQE Tool Arguments
 type RunNQEQueryByStringArgs struct {
 	NetworkID  string                 `json:"network_id" jsonschema:"required,description=ID of the network to query"`
@@ -45,12 +30,12 @@ type RunNQEQueryByStringArgs struct {
 }
 
 type RunNQEQueryByIDArgs struct {
-	NetworkID  string                 `json:"network_id" description:"Network ID to run the query against"`
-	QueryID    string                 `json:"query_id" description:"Query ID from NQE Library (use the 'queryId' field from list_nqe_queries response)"`
-	SnapshotID string                 `json:"snapshot_id,omitempty" description:"Specific snapshot ID to query (optional)"`
-	Parameters map[string]interface{} `json:"parameters,omitempty" description:"Optional parameters for the query"`
-	Options    *NQEQueryOptions       `json:"options,omitempty" description:"Optional query options for sorting and filtering"`
-	AllResults bool                   `json:"all_results,omitempty" description:"If true, fetch all results using pagination (limit/offset) and aggregate them into a single response."`
+	NetworkID  string                 `json:"network_id" jsonschema:"required,description=Network ID to run the query against"`
+	QueryID    string                 `json:"query_id" jsonschema:"required,description=Query ID from NQE Library (use the 'queryId' field from list_nqe_queries response)"`
+	SnapshotID string                 `json:"snapshot_id,omitempty" jsonschema:"description=Specific snapshot ID to query (optional)"`
+	Parameters map[string]interface{} `json:"parameters,omitempty" jsonschema:"description=Optional parameters for the query"`
+	Options    *NQEQueryOptions       `json:"options,omitempty" jsonschema:"description=Optional query options for sorting and filtering"`
+	AllResults bool                   `json:"all_results,omitempty" jsonschema:"description=If true, fetch all results using pagination (limit/offset) and aggregate them into a single response"`
 }
 
 type NQEQueryOptions struct {
@@ -171,21 +156,24 @@ type NetworkDiscoveryArgs struct {
 
 // Resource Arguments
 type NetworkContextArgs struct {
-	// Empty struct - context doesn't need parameters
+	// Dummy parameter for MCP framework compatibility
+	Dummy string `json:"dummy,omitempty" jsonschema:"description=Dummy parameter for no-parameter tools"`
 }
 
 // Default Settings Management argument structures
 type GetDefaultSettingsArgs struct {
-	// No parameters needed to view current defaults
+	// Dummy parameter for MCP framework compatibility
+	Dummy string `json:"dummy,omitempty" jsonschema:"description=Dummy parameter for no-parameter tools"`
 }
 
 type SetDefaultNetworkArgs struct {
-	NetworkIdentifier string `json:"network_identifier"`
+	NetworkIdentifier string `json:"network_identifier" jsonschema:"required,description=Network identifier (ID or name) to set as default"`
 }
 
 // Semantic Cache and AI Enhancement Args
 type GetCacheStatsArgs struct {
-	// No parameters needed for cache stats
+	// Dummy parameter for MCP framework compatibility
+	Dummy string `json:"dummy,omitempty" jsonschema:"description=Dummy parameter for no-parameter tools"`
 }
 
 type SuggestSimilarQueriesArgs struct {
@@ -223,7 +211,8 @@ type FindExecutableQueryArgs struct {
 
 // Smart Query Workflow Arguments
 type SmartQueryWorkflowArgs struct {
-	// No parameters needed for the workflow guide - it's a static documentation prompt
+	// Dummy parameter for MCP framework compatibility
+	Dummy string `json:"dummy,omitempty" jsonschema:"description=Dummy parameter for no-parameter tools"`
 }
 
 // Database Hydration Tools Arguments
@@ -235,11 +224,13 @@ type HydrateDatabaseArgs struct {
 }
 
 type RefreshQueryIndexArgs struct {
-	// No parameters needed - refreshes from current database content
+	// Dummy parameter for MCP framework compatibility
+	Dummy string `json:"dummy,omitempty" jsonschema:"description=Dummy parameter for no-parameter tools"`
 }
 
 type GetDatabaseStatusArgs struct {
-	// No parameters needed - returns database and query index status
+	// Dummy parameter for MCP framework compatibility
+	Dummy string `json:"dummy,omitempty" jsonschema:"description=Dummy parameter for no-parameter tools"`
 }
 
 type GetQueryIndexStatsArgs struct {
@@ -300,7 +291,8 @@ type DeleteObservationArgs struct {
 }
 
 type GetMemoryStatsArgs struct {
-	// No parameters needed - returns memory system statistics
+	// Dummy parameter for MCP framework compatibility
+	Dummy string `json:"dummy,omitempty" jsonschema:"description=Dummy parameter for no-parameter tools"`
 }
 
 // API Analytics Tools Arguments
@@ -326,6 +318,29 @@ type LargeNQEResultsWorkflowArgs struct {
 	SessionID string `json:"session_id,omitempty" jsonschema:"description=Session ID for tracking workflow state"`
 }
 
+// Path Search Arguments
+type SearchPathsArgs struct {
+	NetworkID               string `json:"network_id" jsonschema:"required,description=Network ID to search in"`
+	SnapshotID              string `json:"snapshot_id,omitempty" jsonschema:"description=Snapshot ID to use (optional, uses latest if omitted)"`
+	From                    string `json:"from,omitempty" jsonschema:"description=Source device name"`
+	SrcIP                   string `json:"src_ip,omitempty" jsonschema:"description=Source IP address or subnet"`
+	DstIP                   string `json:"dst_ip" jsonschema:"required,description=Destination IP address or subnet"`
+	IPProto                 *int   `json:"ip_proto,omitempty" jsonschema:"description=IP protocol number"`
+	SrcPort                 string `json:"src_port,omitempty" jsonschema:"description=Source port"`
+	DstPort                 string `json:"dst_port,omitempty" jsonschema:"description=Destination port"`
+	Intent                  string `json:"intent,omitempty" jsonschema:"description=Search intent (PREFER_DELIVERED, PREFER_VIOLATIONS, VIOLATIONS_ONLY)"`
+	MaxCandidates           int    `json:"max_candidates,omitempty" jsonschema:"description=Maximum number of candidates to consider"`
+	MaxResults              int    `json:"max_results,omitempty" jsonschema:"description=Maximum number of results to return"`
+	MaxReturnPathResults    int    `json:"max_return_path_results,omitempty" jsonschema:"description=Maximum number of return path results"`
+	MaxSeconds              int    `json:"max_seconds,omitempty" jsonschema:"description=Maximum seconds per query"`
+	IncludeNetworkFunctions bool   `json:"include_network_functions,omitempty" jsonschema:"description=Include network functions in results"`
+}
+
+// Path Search Workflow Arguments
+type PathSearchWorkflowArgs struct {
+	SessionID string `json:"session_id,omitempty" jsonschema:"description=Session ID for tracking workflow state"`
+}
+
 // Bloom Search Arguments
 type BuildBloomFilterArgs struct {
 	NetworkID  string `json:"network_id" jsonschema:"required,description=Network ID to build filter for"`
@@ -342,5 +357,42 @@ type SearchBloomFilterArgs struct {
 }
 
 type GetBloomFilterStatsArgs struct {
-	// No parameters needed - returns statistics for all bloom filters
+	// Dummy parameter for MCP framework compatibility
+	Dummy string `json:"dummy,omitempty" jsonschema:"description=Dummy parameter for no-parameter tools"`
+}
+
+// Network Prefix Discovery and Connectivity Analysis
+type NetworkPrefixDiscoveryArgs struct {
+	SessionID string `json:"session_id,omitempty" jsonschema:"description=Session ID for tracking workflow state"`
+	Step      string `json:"step,omitempty" jsonschema:"description=Current step in the workflow"`
+}
+
+type NetworkPrefixAnalysisArgs struct {
+	NetworkID    string   `json:"network_id" jsonschema:"required,description=Network ID to analyze"`
+	SnapshotID   string   `json:"snapshot_id,omitempty" jsonschema:"description=Snapshot ID to use (optional, uses latest if omitted)"`
+	PrefixLevels []string `json:"prefix_levels,omitempty" jsonschema:"description=Aggregation levels to analyze (e.g., ['/8', '/16', '/24'])"`
+	FromDevices  []string `json:"from_devices,omitempty" jsonschema:"description=Source devices to analyze"`
+	ToDevices    []string `json:"to_devices,omitempty" jsonschema:"description=Destination devices to analyze"`
+	Intent       string   `json:"intent,omitempty" jsonschema:"description=Search intent (PREFER_DELIVERED, PREFER_VIOLATIONS, VIOLATIONS_ONLY)"`
+	MaxResults   int      `json:"max_results,omitempty" jsonschema:"description=Maximum number of results to return"`
+}
+
+type NetworkPrefixInfo struct {
+	Prefix     string   `json:"prefix"`
+	Device     string   `json:"device"`
+	NetworkID  string   `json:"network_id"`
+	Location   string   `json:"location,omitempty"`
+	Aggregated bool     `json:"aggregated"`
+	Subnets    []string `json:"subnets,omitempty"`
+}
+
+type ConnectivityAnalysisResult struct {
+	FromPrefix       string   `json:"from_prefix"`
+	ToPrefix         string   `json:"to_prefix"`
+	FromDevice       string   `json:"from_device"`
+	ToDevice         string   `json:"to_device"`
+	Connectivity     string   `json:"connectivity"` // "CONNECTED", "PARTIAL", "DISCONNECTED"
+	PathCount        int      `json:"path_count"`
+	AggregationLevel string   `json:"aggregation_level"`
+	Details          []string `json:"details,omitempty"`
 }

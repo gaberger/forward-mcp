@@ -87,13 +87,17 @@ func TestIntegrationSearchPaths(t *testing.T) {
 	networkID := networks[0].ID
 	t.Logf("Testing path search on network: %s (%s)", networks[0].Name, networkID)
 
-	args := SearchPathsArgs{
-		NetworkID:  networkID,
-		DstIP:      "8.8.8.8", // Use a common destination
+	args := SearchPathsBulkArgs{
+		NetworkID: networkID,
+		Queries: []PathSearchQueryArgs{
+			{
+				DstIP: "8.8.8.8", // Use a common destination
+			},
+		},
 		MaxResults: 1,
 	}
 
-	response, err := service.searchPaths(args)
+	response, err := service.searchPathsBulk(args)
 	if err != nil {
 		// Path search might fail if no valid paths exist, which is OK
 		t.Logf("Path search failed (this may be expected): %v", err)
@@ -129,16 +133,20 @@ func TestIntegrationSearchPathsSpecificIPs(t *testing.T) {
 	// Test scenarios with the specific IPs provided
 	testCases := []struct {
 		name        string
-		args        SearchPathsArgs
+		args        SearchPathsBulkArgs
 		expectError bool
 		description string
 	}{
 		{
 			name: "Customer_Specific_IPs_Basic",
-			args: SearchPathsArgs{
-				NetworkID:  networkID,
-				SrcIP:      "10.6.142.197",
-				DstIP:      "10.5.0.130",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP: "10.6.142.197",
+						DstIP: "10.5.0.130",
+					},
+				},
 				MaxResults: 5,
 			},
 			expectError: false,
@@ -146,10 +154,14 @@ func TestIntegrationSearchPathsSpecificIPs(t *testing.T) {
 		},
 		{
 			name: "Customer_Specific_IPs_With_Intent",
-			args: SearchPathsArgs{
-				NetworkID:  networkID,
-				SrcIP:      "10.6.142.197",
-				DstIP:      "10.5.0.130",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP: "10.6.142.197",
+						DstIP: "10.5.0.130",
+					},
+				},
 				Intent:     "PREFER_DELIVERED",
 				MaxResults: 10,
 			},
@@ -158,10 +170,14 @@ func TestIntegrationSearchPathsSpecificIPs(t *testing.T) {
 		},
 		{
 			name: "Customer_Specific_IPs_With_Functions",
-			args: SearchPathsArgs{
-				NetworkID:               networkID,
-				SrcIP:                   "10.6.142.197",
-				DstIP:                   "10.5.0.130",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP: "10.6.142.197",
+						DstIP: "10.5.0.130",
+					},
+				},
 				IncludeNetworkFunctions: true,
 				MaxResults:              3,
 			},
@@ -170,12 +186,16 @@ func TestIntegrationSearchPathsSpecificIPs(t *testing.T) {
 		},
 		{
 			name: "Customer_Specific_IPs_TCP_80",
-			args: SearchPathsArgs{
-				NetworkID:  networkID,
-				SrcIP:      "10.6.142.197",
-				DstIP:      "10.5.0.130",
-				IPProto:    6, // TCP
-				DstPort:    "80",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP:   "10.6.142.197",
+						DstIP:   "10.5.0.130",
+						IPProto: &[]int{6}[0], // TCP
+						DstPort: "80",
+					},
+				},
 				MaxResults: 5,
 			},
 			expectError: false,
@@ -183,10 +203,14 @@ func TestIntegrationSearchPathsSpecificIPs(t *testing.T) {
 		},
 		{
 			name: "Customer_Reverse_Path",
-			args: SearchPathsArgs{
-				NetworkID:  networkID,
-				SrcIP:      "10.5.0.130", // Reverse the IPs
-				DstIP:      "10.6.142.197",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP: "10.5.0.130", // Reverse the IPs
+						DstIP: "10.6.142.197",
+					},
+				},
 				MaxResults: 5,
 			},
 			expectError: false,
@@ -198,7 +222,7 @@ func TestIntegrationSearchPathsSpecificIPs(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("Testing: %s", tc.description)
 
-			response, err := service.searchPaths(tc.args)
+			response, err := service.searchPathsBulk(tc.args)
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
@@ -240,9 +264,9 @@ func TestIntegrationSearchPathsSpecificIPs(t *testing.T) {
 			if strings.Contains(content, "Found") && strings.Contains(content, "paths") {
 				// Extract the number of paths found
 				if strings.Contains(content, "Found 0 paths") {
-					t.Logf("No paths found between %s and %s (this may be expected)", tc.args.SrcIP, tc.args.DstIP)
+					t.Logf("No paths found between %s and %s (this may be expected)", tc.args.Queries[0].SrcIP, tc.args.Queries[0].DstIP)
 				} else {
-					t.Logf("Successfully found paths between %s and %s", tc.args.SrcIP, tc.args.DstIP)
+					t.Logf("Successfully found paths between %s and %s", tc.args.Queries[0].SrcIP, tc.args.Queries[0].DstIP)
 				}
 			}
 
@@ -275,17 +299,21 @@ func TestIntegrationPathSearchResponseStructure(t *testing.T) {
 
 	networkID := networks[0].ID
 
-	args := SearchPathsArgs{
-		NetworkID:  networkID,
-		SrcIP:      "10.6.142.197",
-		DstIP:      "10.5.0.130",
+	args := SearchPathsBulkArgs{
+		NetworkID: networkID,
+		Queries: []PathSearchQueryArgs{
+			{
+				SrcIP: "10.6.142.197",
+				DstIP: "10.5.0.130",
+			},
+		},
 		MaxResults: 1,
 	}
 
 	t.Logf("Testing path search response structure on network: %s", networks[0].Name)
 
 	// Test that the response has the expected structure even if no paths are found
-	response, err := service.searchPaths(args)
+	response, err := service.searchPathsBulk(args)
 	if err != nil {
 		t.Logf("Path search failed: %v", err)
 		// Test that errors are properly formatted
@@ -386,16 +414,20 @@ func TestIntegrationPathSearchSpecificCustomerIPs(t *testing.T) {
 	// Test scenarios with the specific IPs provided by the customer
 	testCases := []struct {
 		name        string
-		args        SearchPathsArgs
+		args        SearchPathsBulkArgs
 		expectError bool
 		description string
 	}{
 		{
 			name: "Customer_Specific_IPs_Basic",
-			args: SearchPathsArgs{
-				NetworkID:  networkID,
-				SrcIP:      "10.6.142.197",
-				DstIP:      "10.5.0.130",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP: "10.6.142.197",
+						DstIP: "10.5.0.130",
+					},
+				},
 				MaxResults: 5,
 			},
 			expectError: false,
@@ -403,10 +435,14 @@ func TestIntegrationPathSearchSpecificCustomerIPs(t *testing.T) {
 		},
 		{
 			name: "Customer_Specific_IPs_With_Intent_PREFER_DELIVERED",
-			args: SearchPathsArgs{
-				NetworkID:  networkID,
-				SrcIP:      "10.6.142.197",
-				DstIP:      "10.5.0.130",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP: "10.6.142.197",
+						DstIP: "10.5.0.130",
+					},
+				},
 				Intent:     "PREFER_DELIVERED",
 				MaxResults: 10,
 			},
@@ -415,10 +451,14 @@ func TestIntegrationPathSearchSpecificCustomerIPs(t *testing.T) {
 		},
 		{
 			name: "Customer_Specific_IPs_With_Functions",
-			args: SearchPathsArgs{
-				NetworkID:               networkID,
-				SrcIP:                   "10.6.142.197",
-				DstIP:                   "10.5.0.130",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP: "10.6.142.197",
+						DstIP: "10.5.0.130",
+					},
+				},
 				IncludeNetworkFunctions: true,
 				MaxResults:              3,
 			},
@@ -427,12 +467,16 @@ func TestIntegrationPathSearchSpecificCustomerIPs(t *testing.T) {
 		},
 		{
 			name: "Customer_Specific_IPs_TCP_443_HTTPS",
-			args: SearchPathsArgs{
-				NetworkID:  networkID,
-				SrcIP:      "10.6.142.197",
-				DstIP:      "10.5.0.130",
-				IPProto:    6, // TCP
-				DstPort:    "443",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP:   "10.6.142.197",
+						DstIP:   "10.5.0.130",
+						IPProto: &[]int{6}[0], // TCP
+						DstPort: "443",
+					},
+				},
 				MaxResults: 5,
 			},
 			expectError: false,
@@ -440,12 +484,16 @@ func TestIntegrationPathSearchSpecificCustomerIPs(t *testing.T) {
 		},
 		{
 			name: "Customer_Specific_IPs_TCP_80_HTTP",
-			args: SearchPathsArgs{
-				NetworkID:  networkID,
-				SrcIP:      "10.6.142.197",
-				DstIP:      "10.5.0.130",
-				IPProto:    6, // TCP
-				DstPort:    "80",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP:   "10.6.142.197",
+						DstIP:   "10.5.0.130",
+						IPProto: &[]int{6}[0], // TCP
+						DstPort: "80",
+					},
+				},
 				MaxResults: 5,
 			},
 			expectError: false,
@@ -453,10 +501,14 @@ func TestIntegrationPathSearchSpecificCustomerIPs(t *testing.T) {
 		},
 		{
 			name: "Customer_Reverse_Path",
-			args: SearchPathsArgs{
-				NetworkID:  networkID,
-				SrcIP:      "10.5.0.130", // Reverse the IPs
-				DstIP:      "10.6.142.197",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP: "10.5.0.130", // Reverse the IPs
+						DstIP: "10.6.142.197",
+					},
+				},
 				MaxResults: 5,
 			},
 			expectError: false,
@@ -464,10 +516,14 @@ func TestIntegrationPathSearchSpecificCustomerIPs(t *testing.T) {
 		},
 		{
 			name: "Customer_Specific_IPs_PREFER_VIOLATIONS",
-			args: SearchPathsArgs{
-				NetworkID:  networkID,
-				SrcIP:      "10.6.142.197",
-				DstIP:      "10.5.0.130",
+			args: SearchPathsBulkArgs{
+				NetworkID: networkID,
+				Queries: []PathSearchQueryArgs{
+					{
+						SrcIP: "10.6.142.197",
+						DstIP: "10.5.0.130",
+					},
+				},
 				Intent:     "PREFER_VIOLATIONS",
 				MaxResults: 5,
 			},
@@ -479,9 +535,9 @@ func TestIntegrationPathSearchSpecificCustomerIPs(t *testing.T) {
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Logf("🔍 Testing: %s", tc.description)
-			t.Logf("   Source IP: %s → Destination IP: %s", tc.args.SrcIP, tc.args.DstIP)
+			t.Logf("   Source IP: %s → Destination IP: %s", tc.args.Queries[0].SrcIP, tc.args.Queries[0].DstIP)
 
-			response, err := service.searchPaths(tc.args)
+			response, err := service.searchPathsBulk(tc.args)
 
 			if tc.expectError && err == nil {
 				t.Errorf("Expected error but got none")
@@ -531,9 +587,9 @@ func TestIntegrationPathSearchSpecificCustomerIPs(t *testing.T) {
 			// Check if we got valid paths
 			if strings.Contains(content, "Found") && strings.Contains(content, "paths") {
 				if strings.Contains(content, "Found 0 paths") {
-					t.Logf("   📍 No paths found between %s and %s (this may be expected if IPs don't exist in topology)", tc.args.SrcIP, tc.args.DstIP)
+					t.Logf("   📍 No paths found between %s and %s (this may be expected if IPs don't exist in topology)", tc.args.Queries[0].SrcIP, tc.args.Queries[0].DstIP)
 				} else {
-					t.Logf("   🎯 Successfully found paths between %s and %s", tc.args.SrcIP, tc.args.DstIP)
+					t.Logf("   🎯 Successfully found paths between %s and %s", tc.args.Queries[0].SrcIP, tc.args.Queries[0].DstIP)
 
 					// Try to extract useful path information
 					if strings.Contains(content, "hops") {

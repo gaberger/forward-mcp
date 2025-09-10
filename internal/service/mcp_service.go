@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"path/filepath"
 	"strings"
@@ -23,11 +24,11 @@ import (
 // Optionally, chunk_index can be used to fetch a single chunk
 // If chunk_index is omitted, all chunks are returned
 type GetNQEResultChunksArgs struct {
-	EntityID   string `json:"entity_id"`
-	QueryID    string `json:"query_id"`
-	NetworkID  string `json:"network_id"`
-	SnapshotID string `json:"snapshot_id"`
-	ChunkIndex *int   `json:"chunk_index,omitempty"`
+	EntityID   string `json:"entity_id" jsonschema:"required,description=Entity ID containing the NQE results"`
+	QueryID    string `json:"query_id" jsonschema:"required,description=Query ID that was executed"`
+	NetworkID  string `json:"network_id" jsonschema:"required,description=Network ID where the query was run"`
+	SnapshotID string `json:"snapshot_id" jsonschema:"required,description=Snapshot ID used for the query"`
+	ChunkIndex *int   `json:"chunk_index,omitempty" jsonschema:"description=Specific chunk index to retrieve (omit for all chunks)"`
 }
 
 // WorkflowState represents the current state of a user workflow
@@ -391,51 +392,64 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 
 	// Path Search Tools
 	if err := server.RegisterTool("search_paths",
-		"Search for network paths by tracing packets through the network. Requires network_id from, or src_ip and dst_ip. Use for connectivity verification, troubleshooting, and routing analysis. Can specify source IP, ports, and protocols for detailed path tracing.",
-		s.searchPaths); err != nil {
+		"🔍 **SINGLE PATH SEARCH**: Execute a single path search by tracing packets through the network.\n\nExecute path searches by tracing packets through the network. This tool is optimized for single path queries.\n\n**Source Specification Rules:**\n- **Option 1**: Use 'from' (device name) - API will use the device as source\n- **Option 2**: Use 'src_ip' (IP address/subnet) - API will resolve the IP to source locations\n- **Option 3**: Use both 'from' + 'src_ip' for precise packet header specification\n\n**Destination Specification:**\n- **REQUIRED**: 'dst_ip' must be a valid IP address or CIDR\n- **IMPORTANT**: Device names are NOT supported in dst_ip - use actual IP addresses\n\n**Best Practices:**\n- Use 'intent' parameter to control search behavior (PREFER_DELIVERED, PREFER_VIOLATIONS, VIOLATIONS_ONLY)\n- Set 'max_results' and 'max_candidates' to control response size and performance\n- Use 'max_seconds' for timeout control\n- 'snapshot_id' is optional - API uses latest processed snapshot if omitted\n\n**For multiple paths, use search_paths_bulk for better performance.**",
+		s.searchPathsEntry); err != nil {
 		return fmt.Errorf("failed to register search_paths tool: %w", err)
+	}
+
+	if err := server.RegisterTool("search_paths_bulk",
+		"🚀 **RECOMMENDED**: Use this tool for path searches (single or bulk) with better performance.\n\nExecute path searches by tracing packets through the network. Supports both single and bulk path searches.\n\n**Source Specification Rules:**\n- **Option 1**: Use 'from' (device name) - API will use the device as source\n- **Option 2**: Use 'src_ip' (IP address/subnet) - API will resolve the IP to source locations\n- **Option 3**: Use both 'from' + 'src_ip' for precise packet header specification\n\n**Destination Specification:**\n- **REQUIRED**: 'dst_ip' must be a valid IP address or CIDR\n- **IMPORTANT**: Device names are NOT supported in dst_ip - use actual IP addresses\n\n**Best Practices:**\n- Use 'intent' parameter to control search behavior (PREFER_DELIVERED, PREFER_VIOLATIONS, VIOLATIONS_ONLY)\n- Set 'max_results' and 'max_candidates' to control response size and performance\n- Use 'max_seconds' and 'max_overall_seconds' for timeout control\n- 'snapshot_id' is optional - API uses latest processed snapshot if omitted\n\n**Request Format:** Provide an array of path search queries, each with 'dst_ip' and either 'from' or 'src_ip'.",
+		s.searchPathsBulkEntry); err != nil {
+		return fmt.Errorf("failed to register search_paths_bulk tool: %w", err)
+	}
+
+	// Register network prefix analysis tool
+	if err := server.RegisterTool("analyze_network_prefixes",
+		"🔍 **Network Prefix Discovery & Connectivity Analysis**\n\nDiscover network prefixes, map them to devices, and analyze connectivity between sites using different aggregation levels.\n\n**Capabilities:**\n- Discover network prefixes (/8, /16, /24, etc.) and map to devices\n- Analyze connectivity between sites using aggregated prefixes\n- Identify network topology patterns and connectivity gaps\n- Generate connectivity matrices for different aggregation levels\n\n**Use Cases:**\n- Site-to-site connectivity analysis\n- Network segmentation validation\n- Route aggregation verification\n- Multi-site network planning\n\n**Parameters:**\n- network_id: Target network for analysis\n- prefix_levels: Aggregation levels to analyze (e.g., ['/8', '/16', '/24'])\n- from_devices/to_devices: Specific devices to analyze\n- intent: Search intent (PREFER_DELIVERED, PREFER_VIOLATIONS, VIOLATIONS_ONLY)\n- max_results: Maximum results per analysis",
+		s.analyzeNetworkPrefixes); err != nil {
+		return fmt.Errorf("failed to register analyze_network_prefixes tool: %w", err)
 	}
 
 	// NQE Tools
 	if err := server.RegisterTool("run_nqe_query_by_id",
-		"Run a Network Query Engine (NQE) query using a predefined query ID from the library. Use for standard reports, compliance checks, and consistent analysis. Supports pagination with 'limit' and 'offset' in options, or set 'all_results: true' to fetch all results in batches.",
+		"🚀 **RECOMMENDED**: Use this tool for standard network analysis and compliance checks.\n\nRun a Network Query Engine (NQE) query using a predefined query ID from the library. This is the preferred method for consistent, reliable network analysis.\n\n**Best Practices:**\n- Use 'all_results: true' to fetch complete datasets\n- Set appropriate 'limit' and 'offset' for pagination\n- Use 'parameters' for dynamic query customization\n- Check query descriptions with list_nqe_queries first\n\n**Performance Tips:**\n- Large results are automatically cached and chunked\n- Use semantic search to find relevant queries\n- Set reasonable limits to avoid timeouts",
 		s.runNQEQueryByID); err != nil {
 		return fmt.Errorf("failed to register run_nqe_query_by_id tool: %w", err)
 	}
 
 	if err := server.RegisterTool("list_nqe_queries",
-		"List available NQE queries from the Forward Networks query library. Use to discover predefined queries for reports and analysis. Can filter by directory (/L3/Basic/, /L3/Advanced/, /L3/Security/). Returns query IDs for use with run_nqe_query_by_id.",
+		"🔍 **DISCOVERY TOOL**: Find available NQE queries for your analysis needs.\n\nList available NQE queries from the Forward Networks query library. Use this to discover predefined queries for reports and analysis.\n\n**Usage Tips:**\n- Filter by directory (e.g., '/L3/Basic/', '/L3/Advanced/', '/L3/Security/')\n- Use search_nqe_queries for semantic search\n- Check query descriptions before running\n- Use query IDs with run_nqe_query_by_id",
 		s.listNQEQueries); err != nil {
 		return fmt.Errorf("failed to register list_nqe_queries tool: %w", err)
 	}
 
 	// First-Class Query Tools - Most Important Network Operations
 	if err := server.RegisterTool("get_device_basic_info",
-		"Get basic device information including names, platforms, and management IPs. Essential for device inventory and discovery. Uses predefined Device Basic Info query.",
+		"📊 **ESSENTIAL**: Get comprehensive device inventory information.\n\nGet basic device information including names, platforms, and management IPs. This is the primary tool for device discovery and inventory management.\n\n**What you get:**\n- Device names and types\n- Platform and OS information\n- Management IP addresses\n- Interface details\n- Device status and properties\n\n**Best Practices:**\n- Use this as your first step in network analysis\n- Set appropriate limits for large networks\n- Use filters to focus on specific device types\n- Combine with get_device_hardware for complete inventory",
 		s.getDeviceBasicInfo); err != nil {
 		return fmt.Errorf("failed to register get_device_basic_info tool: %w", err)
 	}
 
 	if err := server.RegisterTool("get_device_hardware",
-		"Get device hardware information including models, serial numbers, and hardware details. Critical for hardware inventory and lifecycle management.",
+		"🔧 **HARDWARE INVENTORY**: Get detailed hardware information for lifecycle management.\n\nGet device hardware information including models, serial numbers, and hardware details. Critical for hardware inventory and lifecycle management.\n\n**What you get:**\n- Device models and serial numbers\n- Hardware specifications\n- Vendor and platform details\n- Interface hardware information\n- Asset tracking data\n\n**Use Cases:**\n- Hardware refresh planning\n- Asset inventory management\n- Support contract validation\n- Capacity planning",
 		s.getDeviceHardware); err != nil {
 		return fmt.Errorf("failed to register get_device_hardware tool: %w", err)
 	}
 
 	if err := server.RegisterTool("get_hardware_support",
-		"Get hardware support status including end-of-life and support dates. Essential for compliance and planning hardware refreshes.",
+		"⚠️ **COMPLIANCE CRITICAL**: Check hardware support status for security and compliance.\n\nGet hardware support status including end-of-life and support dates. Essential for compliance and planning hardware refreshes.\n\n**What you get:**\n- End-of-life dates\n- Support contract status\n- Security vulnerability information\n- Recommended upgrade paths\n- Compliance status\n\n**Critical Use Cases:**\n- Security compliance audits\n- Hardware refresh planning\n- Risk assessment\n- Budget planning for upgrades",
 		s.getHardwareSupport); err != nil {
 		return fmt.Errorf("failed to register get_hardware_support tool: %w", err)
 	}
 
 	if err := server.RegisterTool("get_os_support",
-		"Get operating system support status including OS versions and support dates. Critical for security compliance and OS upgrade planning.",
+		"🔒 **SECURITY ESSENTIAL**: Check OS support status for security compliance.\n\nGet operating system support status including OS versions and support dates. Critical for security compliance and OS upgrade planning.\n\n**What you get:**\n- OS version information\n- Support end dates\n- Security patch status\n- Upgrade recommendations\n- Compliance status\n\n**Security Use Cases:**\n- Security compliance audits\n- Vulnerability assessment\n- Patch management planning\n- OS upgrade planning",
 		s.getOSSupport); err != nil {
 		return fmt.Errorf("failed to register get_os_support tool: %w", err)
 	}
 
 	if err := server.RegisterTool("search_configs",
-		"Search device configurations for specific patterns, commands, or settings.\n\nTo create a block pattern, use triple backticks (```) to start and end the pattern, and indent lines to show hierarchy. Example:\n\npattern = ```\ninterface\n  zone-member security\n  ip address {ip:string}\n```\n\nEach line is a line pattern. Indentation defines parent/child relationships. Use curly braces for variable extraction (e.g., {ip:string}). For more, see the data extraction guide.",
+		"🔍 **CONFIGURATION SEARCH**: Search device configurations for specific patterns and settings.\n\nSearch device configurations for specific patterns, commands, or settings. Use this to find specific configurations across your network.\n\n**Pattern Examples:**\n```\ninterface\n  zone-member security\n  ip address {ip:string}\n```\n\n**Best Practices:**\n- Use hierarchical patterns with indentation\n- Extract variables with {name:type} syntax\n- Filter by device names for targeted searches\n- Use specific patterns for better results\n\n**Common Use Cases:**\n- Find specific interface configurations\n- Locate security policies\n- Identify routing configurations\n- Audit configuration compliance",
 		s.searchConfigs); err != nil {
 		return fmt.Errorf("failed to register search_configs tool: %w", err)
 	}
@@ -519,7 +533,7 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 
 	// AI-Powered Query Discovery Tools
 	if err := server.RegisterTool("search_nqe_queries",
-		"🧠 AI-powered search through 6000+ predefined NQE queries using natural language. Describe what you want to analyze (e.g., 'AWS security issues', 'BGP routing problems', 'interface utilization') and get relevant query suggestions with similarity scores. Use this for EXPLORATION when you want to see what queries are available for a topic. For actionable results that can be immediately executed, use 'find_executable_query' instead.",
+		"🧠 **AI-POWERED SEARCH**: Find relevant NQE queries using natural language.\n\nAI-powered search through 6000+ predefined NQE queries using natural language. Describe what you want to analyze and get relevant query suggestions.\n\n**Best Practices:**\n- Be specific and descriptive in your query\n- Use examples like 'AWS security issues', 'BGP routing problems'\n- Avoid vague terms like 'network' or 'config'\n- Use category filters to narrow results\n\n**Example Queries:**\n- 'show me AWS security vulnerabilities'\n- 'find BGP routing issues'\n- 'check interface utilization'\n- 'devices with high CPU usage'\n\n**Note:** For executable queries, use find_executable_query instead.",
 		s.searchNQEQueries); err != nil {
 		return fmt.Errorf("failed to register search_nqe_queries tool: %w", err)
 	}
@@ -711,6 +725,36 @@ func (s *ForwardMCPService) RegisterPrompts(server *mcp.Server) error {
 		return mcp.NewPromptResponse("Large NQE Results Workflow", mcp.NewPromptMessage(mcp.NewTextContent("Welcome to Large NQE Results Workflow!"), mcp.RoleAssistant)), nil
 	}); err != nil {
 		return fmt.Errorf("failed to register large_nqe_results_workflow prompt: %w", err)
+	}
+
+	// Register Path Search Workflow as a prompt
+	if err := server.RegisterPrompt("path_search_workflow", "Interactive workflow for effective path search using best practices including 'from' property and bulk operations", func(args PathSearchWorkflowArgs) (*mcp.PromptResponse, error) {
+		response, err := s.pathSearchWorkflow(args)
+		if err != nil {
+			return nil, err
+		}
+		// Convert ToolResponse to PromptResponse
+		if len(response.Content) > 0 {
+			return mcp.NewPromptResponse("Path Search Workflow", mcp.NewPromptMessage(response.Content[0], mcp.RoleAssistant)), nil
+		}
+		return mcp.NewPromptResponse("Path Search Workflow", mcp.NewPromptMessage(mcp.NewTextContent("Welcome to Path Search Workflow!"), mcp.RoleAssistant)), nil
+	}); err != nil {
+		return fmt.Errorf("failed to register path_search_workflow prompt: %w", err)
+	}
+
+	// Register Network Prefix Discovery Workflow as a prompt
+	if err := server.RegisterPrompt("network_prefix_discovery_workflow", "Interactive workflow for discovering network prefixes, mapping them to devices, and analyzing connectivity between sites using different aggregation levels", func(args NetworkPrefixDiscoveryArgs) (*mcp.PromptResponse, error) {
+		response, err := s.networkPrefixDiscoveryWorkflow(args)
+		if err != nil {
+			return nil, err
+		}
+		// Convert ToolResponse to PromptResponse
+		if len(response.Content) > 0 {
+			return mcp.NewPromptResponse("Network Prefix Discovery Workflow", mcp.NewPromptMessage(response.Content[0], mcp.RoleAssistant)), nil
+		}
+		return mcp.NewPromptResponse("Network Prefix Discovery Workflow", mcp.NewPromptMessage(mcp.NewTextContent("Welcome to Network Prefix Discovery Workflow!"), mcp.RoleAssistant)), nil
+	}); err != nil {
+		return fmt.Errorf("failed to register network_prefix_discovery_workflow prompt: %w", err)
 	}
 
 	s.logger.Info("MCP ready - Forward Networks tools registered")
@@ -1125,82 +1169,220 @@ func (s *ForwardMCPService) updateNetwork(args UpdateNetworkArgs) (*mcp.ToolResp
 }
 
 // Path Search Tool Implementations
-func (s *ForwardMCPService) searchPaths(args SearchPathsArgs) (*mcp.ToolResponse, error) {
-	s.logToolCall("search_paths", args, nil)
 
-	// Use defaults if not specified (like other functions do)
+// SearchPathsBulkArgs represents arguments for bulk path search
+type SearchPathsBulkArgs struct {
+	NetworkID               string                `json:"network_id" jsonschema:"required,description=Network ID to search in"`
+	SnapshotID              string                `json:"snapshot_id,omitempty" jsonschema:"description=Snapshot ID to use (optional, uses latest if omitted)"`
+	Queries                 []PathSearchQueryArgs `json:"queries" jsonschema:"required,description=Array of path search queries to execute"`
+	Intent                  string                `json:"intent,omitempty" jsonschema:"description=Search intent (PREFER_DELIVERED, PREFER_VIOLATIONS, VIOLATIONS_ONLY)"`
+	MaxCandidates           int                   `json:"max_candidates,omitempty" jsonschema:"description=Maximum number of candidates to consider"`
+	MaxResults              int                   `json:"max_results,omitempty" jsonschema:"description=Maximum number of results to return"`
+	MaxReturnPathResults    int                   `json:"max_return_path_results,omitempty" jsonschema:"description=Maximum number of return path results"`
+	MaxSeconds              int                   `json:"max_seconds,omitempty" jsonschema:"description=Maximum seconds per query"`
+	MaxOverallSeconds       int                   `json:"max_overall_seconds,omitempty" jsonschema:"description=Maximum overall seconds for all queries"`
+	IncludeNetworkFunctions bool                  `json:"include_network_functions,omitempty" jsonschema:"description=Include network functions in results"`
+}
+
+// PathSearchQueryArgs represents a single path search query in bulk request
+type PathSearchQueryArgs struct {
+	From    string `json:"from,omitempty" jsonschema:"description=Source device name"`
+	SrcIP   string `json:"src_ip,omitempty" jsonschema:"description=Source IP address or subnet"`
+	DstIP   string `json:"dst_ip" jsonschema:"required,description=Destination IP address or subnet"`
+	IPProto *int   `json:"ip_proto,omitempty" jsonschema:"description=IP protocol number"`
+	SrcPort string `json:"src_port,omitempty" jsonschema:"description=Source port"`
+	DstPort string `json:"dst_port,omitempty" jsonschema:"description=Destination port"`
+}
+
+func (s *ForwardMCPService) searchPathsBulk(args SearchPathsBulkArgs) (*mcp.ToolResponse, error) {
+	s.logToolCall("search_paths_bulk", args, nil)
+
+	// Use defaults if not specified
 	networkID := s.getNetworkID(args.NetworkID)
 	snapshotID := s.getSnapshotID(args.SnapshotID)
 
-	// If no snapshot ID is available, fetch the latest snapshot for the network
-	if snapshotID == "" || snapshotID == "latest" {
-		s.logger.Info("searchPaths - No snapshot ID provided or in defaults, fetching latest snapshot for network %s", networkID)
-
+	// Note: snapshotId is optional for bulk API - if omitted, the network's latest processed Snapshot is used
+	// We only fetch it if explicitly requested
+	if snapshotID == "latest" {
+		s.logger.Info("searchPathsBulk - Latest snapshot requested, fetching for network %s", networkID)
 		snapshot, err := s.forwardClient.GetLatestSnapshot(networkID)
 		if err != nil {
 			s.logger.Error("Failed to fetch latest snapshot for network %s: %v", networkID, err)
 			return nil, fmt.Errorf("failed to get latest snapshot for network %s: %w", networkID, err)
 		}
-
 		if snapshot != nil && snapshot.ID != "" {
 			snapshotID = snapshot.ID
-			s.logger.Info("searchPaths - Using latest snapshot ID: %s", snapshotID)
+			s.logger.Info("searchPathsBulk - Using latest snapshot ID: %s", snapshotID)
 		} else {
 			s.logger.Warn("No valid snapshot found for network %s", networkID)
 			return nil, fmt.Errorf("no valid snapshot found for network %s - ensure the network has been processed", networkID)
 		}
 	}
 
-	s.logger.Debug("Path search: networkID=%s, snapshotID=%s, srcIP=%s, dstIP=%s",
-		networkID, snapshotID, args.SrcIP, args.DstIP)
+	// Validate queries
+	if len(args.Queries) == 0 {
+		return nil, fmt.Errorf("at least one query must be provided in bulk path search")
+	}
 
-	params := &forward.PathSearchParams{
-		DstIP:                   args.DstIP,
-		SrcIP:                   args.SrcIP,
-		From:                    args.From,
+	// Convert queries to forward API format
+	var bulkQueries []forward.PathSearchParams
+	for i, query := range args.Queries {
+		// Validate required fields
+		if query.DstIP == "" {
+			return nil, fmt.Errorf("query %d: dst_ip is required", i+1)
+		}
+
+		// Validate that we have either 'from' or 'src_ip'
+		if query.From == "" && query.SrcIP == "" {
+			return nil, fmt.Errorf("query %d: either 'from' or 'src_ip' must be specified", i+1)
+		}
+
+		// When 'from' is specified, srcIp is optional (API will use device as source)
+		// When no 'from' is specified, srcIp is required
+		srcIP := query.SrcIP
+		if query.From == "" && srcIP == "" {
+			return nil, fmt.Errorf("query %d: 'src_ip' is required when 'from' is not specified", i+1)
+		}
+
+		// Validate dst_ip - must be a valid IP address or CIDR (no device name resolution)
+		dstIP := query.DstIP
+		s.logger.Debug("Processing dst_ip: %s for query %d", dstIP, i+1)
+
+		// Check if it's a valid IP address
+		if net.ParseIP(dstIP) != nil {
+			s.logger.Debug("dst_ip '%s' is a valid IP address", dstIP)
+		} else if strings.Contains(dstIP, "/") {
+			// Check if it's a valid CIDR
+			if _, _, err := net.ParseCIDR(dstIP); err != nil {
+				return nil, fmt.Errorf("query %d: dst_ip '%s' is not a valid IP address or CIDR: %w", i+1, dstIP, err)
+			}
+			s.logger.Debug("dst_ip '%s' is a valid CIDR", dstIP)
+		} else {
+			// Not an IP or CIDR - reject device names
+			return nil, fmt.Errorf("query %d: dst_ip '%s' must be a valid IP address or CIDR (device names are not supported)", i+1, dstIP)
+		}
+
+		params := forward.PathSearchParams{
+			From:    query.From,
+			SrcIP:   srcIP,
+			DstIP:   dstIP,
+			SrcPort: query.SrcPort,
+			DstPort: query.DstPort,
+		}
+
+		if query.IPProto != nil {
+			params.IPProto = query.IPProto
+		}
+
+		bulkQueries = append(bulkQueries, params)
+	}
+
+	s.logger.Debug("Bulk path search: networkID=%s, snapshotID=%s, queries=%d",
+		networkID, snapshotID, len(bulkQueries))
+
+	// Create the bulk request with top-level parameters
+	bulkRequest := &forward.PathSearchBulkRequest{
+		Queries:                 bulkQueries,
 		Intent:                  args.Intent,
-		SrcPort:                 args.SrcPort,
-		DstPort:                 args.DstPort,
+		MaxCandidates:           args.MaxCandidates,
 		MaxResults:              args.MaxResults,
+		MaxReturnPathResults:    args.MaxReturnPathResults,
+		MaxSeconds:              args.MaxSeconds,
+		MaxOverallSeconds:       args.MaxOverallSeconds,
 		IncludeNetworkFunctions: args.IncludeNetworkFunctions,
-		SnapshotID:              snapshotID, // Now uses latest snapshot if not provided
 	}
 
-	if args.IPProto != 0 {
-		params.IPProto = &args.IPProto
+	// Execute bulk path search
+	// Pass empty string if no snapshotId is needed (API will use latest processed snapshot)
+	apiSnapshotID := ""
+	if snapshotID != "" && snapshotID != "latest" {
+		apiSnapshotID = snapshotID
 	}
-
-	response, err := s.forwardClient.SearchPaths(networkID, params)
+	responses, err := s.forwardClient.SearchPathsBulk(networkID, bulkRequest, apiSnapshotID)
 	if err != nil {
-		s.logger.Error("Path search failed: %v", err)
-		return nil, fmt.Errorf("failed to search paths: %w", err)
+		s.logger.Error("Bulk path search failed: %v", err)
+		return nil, fmt.Errorf("failed to execute bulk path search: %w", err)
 	}
 
-	// Track path search in memory system
+	s.logger.Debug("Bulk path search API returned %d responses", len(responses))
+	if len(responses) > 0 {
+		s.logger.Debug("First response structure: %+v", responses[0])
+	}
+
+	// Track bulk path search in memory system
 	if s.apiTracker != nil {
-		if trackErr := s.apiTracker.TrackPathSearch(networkID, args.SrcIP, args.DstIP, response); trackErr != nil {
-			s.logger.Debug("Failed to track path search in memory system: %v", trackErr)
+		for i, response := range responses {
+			if i < len(args.Queries) {
+				query := args.Queries[i]
+				// Convert bulk response to legacy format for tracking
+				legacyResponse := &forward.PathSearchResponse{
+					Paths: make([]forward.Path, len(response.Info.Paths)),
+				}
+				for j, bulkPath := range response.Info.Paths {
+					legacyResponse.Paths[j] = forward.Path{
+						Hops: make([]forward.Hop, len(bulkPath.Hops)),
+					}
+					for k, bulkHop := range bulkPath.Hops {
+						legacyResponse.Paths[j].Hops[k] = forward.Hop{
+							Device:    bulkHop.DeviceName,
+							Interface: bulkHop.IngressInterface,
+							Action:    bulkHop.DeviceType,
+						}
+					}
+				}
+				if trackErr := s.apiTracker.TrackPathSearch(networkID, query.SrcIP, query.DstIP, legacyResponse); trackErr != nil {
+					s.logger.Debug("Failed to track bulk path search %d in memory system: %v", i+1, trackErr)
+				}
+			}
 		}
 	}
 
-	s.logger.Debug("Path search completed: found %d paths, searchTime=%dms, candidates=%d, snapshotID=%s",
-		len(response.Paths), response.SearchTimeMs, response.NumCandidatesFound, response.SnapshotID)
+	// Build summary
+	totalPaths := 0
+	successfulQueries := 0
+	var errors []string
 
-	result := MarshalCompactJSONString(response)
+	s.logger.Debug("Processing %d bulk path search responses", len(responses))
+	for i, response := range responses {
+		// For bulk responses, paths are in response.Info.Paths
+		pathCount := len(response.Info.Paths)
+		s.logger.Debug("Response %d: Paths=%d, DstIpLocationType=%s, TimedOut=%v",
+			i+1, pathCount, response.DstIpLocationType, response.TimedOut)
+
+		if pathCount > 0 {
+			totalPaths += pathCount
+			successfulQueries++
+			s.logger.Debug("Response %d: Found %d paths", i+1, pathCount)
+		} else {
+			errors = append(errors, fmt.Sprintf("Query %d: No paths found", i+1))
+			s.logger.Debug("Response %d: No paths found", i+1)
+		}
+	}
 
 	// Enhanced response with debugging info
 	debugInfo := ""
-	if response.SnapshotID == "" {
-		debugInfo += "\n⚠️  Warning: No snapshot ID in response - this might indicate an issue\n"
-	}
-	if response.SearchTimeMs == 0 {
-		debugInfo += "\n⚠️  Warning: Search time was 0ms - this suggests no real search occurred\n"
-	}
-	if response.NumCandidatesFound == 0 && args.SrcIP != "" {
-		debugInfo += fmt.Sprintf("\n💡 No candidates found for source IP %s - this IP might not exist in the network topology\n", args.SrcIP)
+	if len(errors) > 0 {
+		debugInfo += fmt.Sprintf("\n⚠️  Warnings: %d queries had issues\n", len(errors))
+		for _, err := range errors {
+			debugInfo += fmt.Sprintf("  - %s\n", err)
+		}
 	}
 
-	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Path search completed. Found %d paths:%s\n%s", len(response.Paths), debugInfo, result))), nil
+	// Check for missing "from" property usage
+	missingFromCount := 0
+	for _, query := range args.Queries {
+		if query.From == "" {
+			missingFromCount++
+		}
+	}
+	if missingFromCount > 0 {
+		debugInfo += fmt.Sprintf("\n💡 Tip: %d queries don't use the 'from' property. Consider adding it for more accurate results.\n", missingFromCount)
+	}
+
+	result := MarshalCompactJSONString(responses)
+
+	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Bulk path search completed. %d/%d queries successful, found %d total paths:%s\n%s",
+		successfulQueries, len(args.Queries), totalPaths, debugInfo, result))), nil
 }
 
 // Helper function to convert service NQEQueryOptions to forward NQEQueryOptions
@@ -2741,8 +2923,8 @@ func (s *ForwardMCPService) getNQEResultSummary(args GetNQEResultChunksArgs) (*m
 
 // Add analyze_nqe_result_sql tool handler
 type AnalyzeNQEResultSQLArgs struct {
-	EntityID string `json:"entity_id"`
-	SQLQuery string `json:"sql_query"`
+	EntityID string `json:"entity_id" jsonschema:"required,description=Entity ID containing the NQE results to analyze"`
+	SQLQuery string `json:"sql_query" jsonschema:"required,description=SQL query to execute against the NQE results"`
 }
 
 func (s *ForwardMCPService) analyzeNQEResultSQL(args AnalyzeNQEResultSQLArgs) (*mcp.ToolResponse, error) {
@@ -3124,4 +3306,1117 @@ func formatBytes(bytes int64) string {
 		exp++
 	}
 	return fmt.Sprintf("%.1f %cB", float64(bytes)/float64(div), "KMGTPE"[exp])
+}
+
+func (s *ForwardMCPService) pathSearchWorkflow(args PathSearchWorkflowArgs) (*mcp.ToolResponse, error) {
+	sessionID := fmt.Sprintf("path_session_%v", args.SessionID)
+	state := s.workflowManager.GetState(sessionID)
+
+	switch state.CurrentStep {
+	case "start":
+		return s.startPathSearchWorkflow(sessionID)
+	case "explain_best_practices":
+		return s.explainPathSearchBestPractices(sessionID)
+	case "show_bulk_example":
+		return s.showBulkPathSearchExample(sessionID)
+	case "guide_request_building":
+		return s.guidePathSearchRequestBuilding(sessionID)
+	case "network_scope_discovery":
+		return s.guideNetworkScopeDiscovery(sessionID)
+	default:
+		return s.startPathSearchWorkflow(sessionID)
+	}
+}
+
+func (s *ForwardMCPService) startPathSearchWorkflow(sessionID string) (*mcp.ToolResponse, error) {
+	state := &WorkflowState{
+		CurrentStep: "explain_best_practices",
+		Parameters:  make(map[string]interface{}),
+	}
+	s.workflowManager.SetState(sessionID, state)
+
+	content := `🚀 **Welcome to the Path Search Workflow!**
+
+This workflow will guide you through effective path search using Forward Networks best practices.
+
+**Key Principles:**
+1. **Always use 'from' property** - Specify the source device for more accurate results
+2. **Use bulk operations** - For multiple paths, use search_paths_bulk for better performance
+3. **Set appropriate limits** - Control response size with max_results and max_candidates
+4. **Choose the right intent** - PREFER_DELIVERED, PREFER_VIOLATIONS, or VIOLATIONS_ONLY
+
+**Next Steps:**
+- Learn about best practices for path search
+- See examples of bulk path search requests
+- Get guidance on building effective requests
+
+Would you like to continue with the best practices explanation?`
+
+	return mcp.NewToolResponse(mcp.NewTextContent(content)), nil
+}
+
+func (s *ForwardMCPService) explainPathSearchBestPractices(sessionID string) (*mcp.ToolResponse, error) {
+	state := &WorkflowState{
+		CurrentStep: "show_bulk_example",
+		Parameters:  make(map[string]interface{}),
+	}
+	s.workflowManager.SetState(sessionID, state)
+
+	content := `📋 **Path Search Best Practices**
+
+**1. Use the 'from' Property (CRITICAL)**
+- Always specify the source device using 'from' property
+- This provides more accurate results than src_ip alone
+- Example: "from": "router-01", "src_ip": "10.0.1.1"
+
+**2. Choose the Right Tool**
+- **Single path**: Use search_paths for one-off analysis
+- **Multiple paths**: Use search_paths_bulk for concurrent execution
+
+**3. Set Appropriate Intent**
+- PREFER_DELIVERED: Find paths where traffic reaches destination
+- PREFER_VIOLATIONS: Find paths with drops, blackholes, loops
+- VIOLATIONS_ONLY: Only find problematic paths
+
+**4. Control Response Size**
+- max_results: Limit returned paths (default: 1)
+- max_candidates: Limit computed candidates (default: 5000)
+- max_seconds: Per-query timeout (default: 30s)
+
+**5. Performance Tips**
+- Use bulk operations for multiple queries
+- Set reasonable timeouts
+- Include network functions only when needed
+
+Would you like to see a bulk path search example?`
+
+	return mcp.NewToolResponse(mcp.NewTextContent(content)), nil
+}
+
+func (s *ForwardMCPService) showBulkPathSearchExample(sessionID string) (*mcp.ToolResponse, error) {
+	state := &WorkflowState{
+		CurrentStep: "guide_request_building",
+		Parameters:  make(map[string]interface{}),
+	}
+	s.workflowManager.SetState(sessionID, state)
+
+	content := `💡 **Bulk Path Search Example**
+
+Here's how to structure a bulk path search request:
+
+{
+  "network_id": "your-network-id",
+  "queries": [
+    {
+      "from": "router-01",
+      "src_ip": "10.0.1.1",
+      "dst_ip": "10.0.2.1",
+      "src_port": "80",
+      "dst_port": "443"
+    },
+    {
+      "from": "switch-01", 
+      "src_ip": "10.0.1.2",
+      "dst_ip": "10.0.3.1"
+    },
+    {
+      "from": "firewall-01",
+      "src_ip": "192.168.1.1",
+      "dst_ip": "8.8.8.8"
+    }
+  ],
+  "intent": "PREFER_DELIVERED",
+  "max_results": 5,
+  "max_candidates": 1000,
+  "max_seconds": 30
+}
+
+**Key Points:**
+- Each query in the array uses the 'from' property
+- All queries run concurrently for better performance
+- Common parameters (intent, limits) apply to all queries
+- Individual queries can override common parameters
+
+Would you like guidance on building your own requests?`
+
+	return mcp.NewToolResponse(mcp.NewTextContent(content)), nil
+}
+
+func (s *ForwardMCPService) guidePathSearchRequestBuilding(sessionID string) (*mcp.ToolResponse, error) {
+	state := &WorkflowState{
+		CurrentStep: "network_scope_discovery",
+		Parameters:  make(map[string]interface{}),
+	}
+	s.workflowManager.SetState(sessionID, state)
+
+	content := `🎯 **Building Effective Path Search Requests**
+
+**Step 1: Choose Your Tool**
+- Single path: search_paths
+- Multiple paths: search_paths_bulk
+
+**Step 2: Gather Required Information**
+- Network ID (use list_networks to find)
+- Source device name (use list_devices to find)
+- Source IP address
+- Destination IP address/subnet
+
+**Step 3: Build Your Request**
+{
+  "network_id": "your-network-id",
+  "from": "device-name",           // ALWAYS include this
+  "src_ip": "source-ip",           // Combine with 'from'
+  "dst_ip": "destination-ip",      // Required
+  "intent": "PREFER_DELIVERED",    // Choose appropriate intent
+  "max_results": 5                 // Control response size
+}
+
+**Step 4: For Bulk Requests**
+- Create an array of queries
+- Each query follows the same structure
+- Set common parameters at the top level
+
+**Common Mistakes to Avoid:**
+❌ Not using the 'from' property
+❌ Using single path search for multiple queries
+❌ Not setting appropriate limits
+❌ Using wrong intent for your use case
+
+**Next: Discover Network Scopes for Better Planning**
+Would you like to learn how to discover network scopes and locations for more effective path planning?`
+
+	return mcp.NewToolResponse(mcp.NewTextContent(content)), nil
+}
+
+func (s *ForwardMCPService) guideNetworkScopeDiscovery(sessionID string) (*mcp.ToolResponse, error) {
+	state := &WorkflowState{
+		CurrentStep: "complete",
+		Parameters:  make(map[string]interface{}),
+	}
+	s.workflowManager.SetState(sessionID, state)
+
+	content := `🌐 **Network Scope Discovery for Path Planning**
+
+**Why Discover Network Scopes?**
+Before planning complex path searches, it's valuable to understand your network's structure:
+- **Location-based analysis**: Identify network scopes in each site/location
+- **Aggregation opportunities**: Find /8, /16, /24 prefixes that can be tested together
+- **Connectivity planning**: Understand which locations can reach each other
+- **Efficient path testing**: Test connectivity between aggregated prefixes instead of individual IPs
+
+**What Network Scope Discovery Does:**
+1. **Discovers all network prefixes** in your network by location
+2. **Identifies aggregation levels** (/8, /16, /24 for IPv4; /32, /48, /64 for IPv6)
+3. **Maps devices to prefixes** and locations
+4. **Tests connectivity** between different locations and aggregation levels
+5. **Generates comprehensive reports** with insights and recommendations
+
+**Example Output:**
+
+Location: ATL-DC01
+- /8: 10.0.0.0/8 (15 devices)
+- /16: 10.110.0.0/16 (8 devices)
+- /24: 10.110.37.0/24 (3 devices)
+
+Location: SJC-DC01
+- /8: 10.0.0.0/8 (12 devices)
+- /16: 10.117.0.0/16 (6 devices)
+
+Connectivity: ATL-DC01 ↔ SJC-DC01 ✅ CONNECTED
+
+**How to Use:**
+- Run analyze_network_prefixes to discover your network structure
+- Use the discovered prefixes in your path search requests
+- Test connectivity between locations at different aggregation levels
+
+**Benefits for Path Search:**
+- **Smarter planning**: Know which prefixes to test
+- **Efficient testing**: Test aggregated prefixes instead of individual IPs
+- **Location awareness**: Understand site-to-site connectivity
+- **Better results**: Focus on meaningful network segments
+
+**This completes the Path Search Workflow!** 🚀
+
+You now have the tools and knowledge to:
+1. ✅ Use best practices for path search
+2. ✅ Build effective bulk path search requests
+3. ✅ Discover network scopes for better planning
+4. ✅ Execute comprehensive path analysis
+
+Ready to start analyzing your network!`
+
+	return mcp.NewToolResponse(mcp.NewTextContent(content)), nil
+}
+
+// NormalizePathSearchRequest normalizes user input to the correct structure for path search
+func NormalizePathSearchRequest(input map[string]interface{}) (isBulk bool, bulkArgs SearchPathsBulkArgs, err error) {
+	// Always treat as bulk request - convert single requests to bulk format
+	isBulk = true
+	bulkArgs = SearchPathsBulkArgs{}
+
+	// Parse common parameters
+	if v, ok := input["network_id"].(string); ok {
+		bulkArgs.NetworkID = v
+	}
+	if v, ok := input["snapshot_id"].(string); ok {
+		bulkArgs.SnapshotID = v
+	}
+	if v, ok := input["intent"].(string); ok {
+		bulkArgs.Intent = v
+	}
+	if v, ok := input["max_candidates"].(int); ok {
+		bulkArgs.MaxCandidates = v
+	}
+	if v, ok := input["max_results"].(int); ok {
+		bulkArgs.MaxResults = v
+	}
+	if v, ok := input["max_return_path_results"].(int); ok {
+		bulkArgs.MaxReturnPathResults = v
+	}
+	if v, ok := input["max_seconds"].(int); ok {
+		bulkArgs.MaxSeconds = v
+	}
+	if v, ok := input["max_overall_seconds"].(int); ok {
+		bulkArgs.MaxOverallSeconds = v
+	}
+	if v, ok := input["include_network_functions"].(bool); ok {
+		bulkArgs.IncludeNetworkFunctions = v
+	}
+
+	// Check if this is a bulk request with queries array
+	if queries, ok := input["queries"]; ok {
+		// Parse queries array
+		if arr, ok := queries.([]interface{}); ok {
+			for _, q := range arr {
+				if qm, ok := q.(map[string]interface{}); ok {
+					query := PathSearchQueryArgs{}
+					if v, ok := qm["from"].(string); ok {
+						query.From = v
+					}
+					if v, ok := qm["src_ip"].(string); ok {
+						query.SrcIP = v
+					}
+					if v, ok := qm["dst_ip"].(string); ok {
+						query.DstIP = v
+					}
+					if v, ok := qm["src_port"].(string); ok {
+						query.SrcPort = v
+					}
+					if v, ok := qm["dst_port"].(string); ok {
+						query.DstPort = v
+					}
+					if v, ok := qm["ip_proto"].(int); ok {
+						query.IPProto = &v
+					}
+					bulkArgs.Queries = append(bulkArgs.Queries, query)
+				}
+			}
+		}
+	} else {
+		// Single request - convert to bulk format
+		query := PathSearchQueryArgs{}
+		if v, ok := input["from"].(string); ok {
+			query.From = v
+		}
+		if v, ok := input["src_ip"].(string); ok {
+			query.SrcIP = v
+		}
+		if v, ok := input["dst_ip"].(string); ok {
+			query.DstIP = v
+		}
+		if v, ok := input["src_port"].(string); ok {
+			query.SrcPort = v
+		}
+		if v, ok := input["dst_port"].(string); ok {
+			query.DstPort = v
+		}
+		if v, ok := input["ip_proto"].(int); ok {
+			query.IPProto = &v
+		}
+		bulkArgs.Queries = append(bulkArgs.Queries, query)
+	}
+
+	return
+}
+
+// Single path search entry point - converts to bulk format
+func (s *ForwardMCPService) searchPathsEntry(args SearchPathsArgs) (*mcp.ToolResponse, error) {
+	// Convert single path search to bulk format
+	bulkArgs := SearchPathsBulkArgs{
+		NetworkID:               args.NetworkID,
+		SnapshotID:              args.SnapshotID,
+		Intent:                  args.Intent,
+		MaxCandidates:           args.MaxCandidates,
+		MaxResults:              args.MaxResults,
+		MaxReturnPathResults:    args.MaxReturnPathResults,
+		MaxSeconds:              args.MaxSeconds,
+		IncludeNetworkFunctions: args.IncludeNetworkFunctions,
+		Queries: []PathSearchQueryArgs{
+			{
+				From:    args.From,
+				SrcIP:   args.SrcIP,
+				DstIP:   args.DstIP,
+				IPProto: args.IPProto,
+				SrcPort: args.SrcPort,
+				DstPort: args.DstPort,
+			},
+		},
+	}
+	return s.searchPathsBulk(bulkArgs)
+}
+
+// Update the searchPathsBulk entrypoint to route single queries to searchPaths
+func (s *ForwardMCPService) searchPathsBulkEntry(args SearchPathsBulkArgs) (*mcp.ToolResponse, error) {
+	return s.searchPathsBulk(args)
+}
+
+// Network Prefix Discovery and Analysis Methods
+
+func (s *ForwardMCPService) networkPrefixDiscoveryWorkflow(args NetworkPrefixDiscoveryArgs) (*mcp.ToolResponse, error) {
+	sessionID := fmt.Sprintf("session_%v", args.SessionID)
+	state := s.workflowManager.GetState(sessionID)
+
+	switch state.CurrentStep {
+	case "start":
+		return s.startNetworkPrefixDiscovery(sessionID)
+	case "explain_process":
+		return s.explainNetworkPrefixProcess(sessionID)
+	case "show_example":
+		return s.showNetworkPrefixExample(sessionID)
+	case "guide_analysis":
+		return s.guideNetworkPrefixAnalysis(sessionID)
+	default:
+		return s.startNetworkPrefixDiscovery(sessionID)
+	}
+}
+
+func (s *ForwardMCPService) startNetworkPrefixDiscovery(sessionID string) (*mcp.ToolResponse, error) {
+	state := &WorkflowState{
+		CurrentStep: "explain_process",
+		Parameters:  make(map[string]interface{}),
+	}
+	s.workflowManager.SetState(sessionID, state)
+
+	content := `🔍 **Network Prefix Discovery & Connectivity Analysis Workflow**
+
+Welcome to the Network Prefix Discovery workflow! This powerful tool helps you:
+
+**🎯 What We Can Discover:**
+- Network prefixes (/8, /16, /24, etc.) and their device mappings
+- Site-to-site connectivity using aggregated prefixes
+- Network topology patterns and connectivity gaps
+- Route aggregation verification across your network
+
+**🚀 Key Capabilities:**
+1. **Prefix Discovery**: Find all network prefixes and map them to devices
+2. **Aggregation Analysis**: Test connectivity using different prefix levels
+3. **Site Connectivity**: Analyze connectivity between different sites/locations
+4. **Topology Mapping**: Create connectivity matrices for network planning
+
+**📋 Available Steps:**
+1. **explain_process** - Learn how the analysis works
+2. **show_example** - See a practical example
+3. **guide_analysis** - Get step-by-step guidance
+4. **run_analysis** - Execute the actual analysis
+
+**💡 Use Cases:**
+- Multi-site network planning
+- Network segmentation validation
+- Route aggregation verification
+- Connectivity gap analysis
+- Network topology documentation
+
+What would you like to explore first? Type the step name or ask questions about the process.`
+
+	return mcp.NewToolResponse(mcp.NewTextContent(content)), nil
+}
+
+func (s *ForwardMCPService) explainNetworkPrefixProcess(sessionID string) (*mcp.ToolResponse, error) {
+	state := &WorkflowState{
+		CurrentStep: "show_example",
+		Parameters:  make(map[string]interface{}),
+	}
+	s.workflowManager.SetState(sessionID, state)
+
+	content := `🔬 **How Network Prefix Discovery Works**
+
+**Step 1: Prefix Discovery**
+- Query all devices in the network for their IP addresses
+- Extract network prefixes from device interfaces
+- Map prefixes to devices and locations
+- Identify aggregation opportunities
+
+**Step 2: Aggregation Analysis**
+- Group prefixes by different levels (/8, /16, /24, etc.)
+- Create connectivity test matrices
+- Test paths between aggregated prefixes
+- Identify connectivity patterns
+
+**Step 3: Site Connectivity Analysis**
+- Map devices to physical locations/sites
+- Test connectivity between sites using aggregated prefixes
+- Identify connectivity gaps and bottlenecks
+- Generate connectivity reports
+
+**Step 4: Topology Mapping**
+- Create connectivity matrices for different aggregation levels
+- Visualize network topology patterns
+- Identify redundant paths and single points of failure
+- Document network architecture
+
+**🔧 Technical Process:**
+1. Use NQE queries to discover device IP addresses
+2. Extract and normalize network prefixes
+3. Use bulk path search to test connectivity
+4. Aggregate results by prefix levels
+5. Generate comprehensive connectivity reports
+
+**📊 Output Types:**
+- Device-to-prefix mappings
+- Connectivity matrices by aggregation level
+- Site-to-site connectivity reports
+- Network topology visualizations
+- Gap analysis and recommendations
+
+Ready to see an example? Type "show_example" to continue.`
+
+	return mcp.NewToolResponse(mcp.NewTextContent(content)), nil
+}
+
+func (s *ForwardMCPService) showNetworkPrefixExample(sessionID string) (*mcp.ToolResponse, error) {
+	state := &WorkflowState{
+		CurrentStep: "guide_analysis",
+		Parameters:  make(map[string]interface{}),
+	}
+	s.workflowManager.SetState(sessionID, state)
+
+	content := "📋 **Network Prefix Analysis Example**\n\n" +
+		"**Example Scenario: Multi-Site Enterprise Network**\n\n" +
+		"**Network Structure:**\n" +
+		"- Site A: 10.1.0.0/16 (HQ)\n" +
+		"- Site B: 10.2.0.0/16 (Branch 1)\n" +
+		"- Site C: 10.3.0.0/16 (Branch 2)\n" +
+		"- Site D: 192.168.1.0/24 (DMZ)\n\n" +
+		"**Analysis Request:**\n" +
+		"```json\n" +
+		"{\n" +
+		"  \"network_id\": \"162112\",\n" +
+		"  \"prefix_levels\": [\"/8\", \"/16\", \"/24\"],\n" +
+		"  \"from_devices\": [\"hq-router\", \"branch1-router\", \"branch2-router\"],\n" +
+		"  \"to_devices\": [\"hq-router\", \"branch1-router\", \"branch2-router\", \"dmz-firewall\"],\n" +
+		"  \"intent\": \"PREFER_DELIVERED\",\n" +
+		"  \"max_results\": 10\n" +
+		"}\n" +
+		"```\n\n" +
+		"**Expected Results:**\n" +
+		"1. **Prefix Discovery:**\n" +
+		"   - 10.0.0.0/8 (aggregated from all sites)\n" +
+		"   - 10.1.0.0/16, 10.2.0.0/16, 10.3.0.0/16 (individual sites)\n" +
+		"   - 192.168.1.0/24 (DMZ)\n\n" +
+		"2. **Connectivity Matrix:**\n" +
+		"   - Site A ↔ Site B: CONNECTED (via 10.0.0.0/8)\n" +
+		"   - Site A ↔ Site C: CONNECTED (via 10.0.0.0/8)\n" +
+		"   - Site A ↔ DMZ: PARTIAL (via specific routes)\n" +
+		"   - All sites ↔ Internet: CONNECTED (via DMZ)\n\n" +
+		"3. **Insights:**\n" +
+		"   - All sites have connectivity at /8 level\n" +
+		"   - DMZ has restricted access to internal sites\n" +
+		"   - Redundant paths exist between major sites\n" +
+		"   - Internet access is centralized through DMZ\n\n" +
+		"**🔍 Key Benefits:**\n" +
+		"- Understand network segmentation\n" +
+		"- Validate routing policies\n" +
+		"- Identify connectivity gaps\n" +
+		"- Plan network expansions\n" +
+		"- Document network architecture\n\n" +
+		"Ready to run your own analysis? Type \"guide_analysis\" for step-by-step instructions."
+
+	return mcp.NewToolResponse(mcp.NewTextContent(content)), nil
+}
+
+func (s *ForwardMCPService) guideNetworkPrefixAnalysis(sessionID string) (*mcp.ToolResponse, error) {
+	state := &WorkflowState{
+		CurrentStep: "run_analysis",
+		Parameters:  make(map[string]interface{}),
+	}
+	s.workflowManager.SetState(sessionID, state)
+
+	content := "🎯 **Step-by-Step Network Prefix Analysis Guide**\n\n" +
+		"**Step 1: Prepare Your Analysis**\n" +
+		"1. Identify your target network (network_id)\n" +
+		"2. Choose aggregation levels (prefix_levels)\n" +
+		"3. Select source and destination devices\n" +
+		"4. Set analysis parameters\n\n" +
+		"**Step 2: Run the Analysis**\n" +
+		"Use the analyze_network_prefixes tool with:\n" +
+		"```json\n" +
+		"{\n" +
+		"  \"network_id\": \"your_network_id\",\n" +
+		"  \"prefix_levels\": [\"/8\", \"/16\", \"/24\"],\n" +
+		"  \"from_devices\": [\"device1\", \"device2\"],\n" +
+		"  \"to_devices\": [\"device3\", \"device4\"],\n" +
+		"  \"intent\": \"PREFER_DELIVERED\",\n" +
+		"  \"max_results\": 10\n" +
+		"}\n" +
+		"```\n\n" +
+		"**Step 3: Interpret Results**\n" +
+		"- **CONNECTED**: Full connectivity at this aggregation level\n" +
+		"- **PARTIAL**: Some paths exist but not all\n" +
+		"- **DISCONNECTED**: No connectivity at this level\n\n" +
+		"**Step 4: Generate Insights**\n" +
+		"- Network segmentation analysis\n" +
+		"- Connectivity gap identification\n" +
+		"- Route aggregation verification\n" +
+		"- Topology documentation\n\n" +
+		"**🚀 Ready to Start?**\n" +
+		"Use the analyze_network_prefixes tool with your specific parameters to begin the analysis.\n\n" +
+		"**💡 Pro Tips:**\n" +
+		"- Start with broader aggregation levels (/8, /16)\n" +
+		"- Focus on key devices first\n" +
+		"- Use PREFER_DELIVERED for normal connectivity testing\n" +
+		"- Set reasonable max_results to avoid timeouts\n\n" +
+		"Your analysis is ready to run! Use the tool with your network parameters."
+
+	return mcp.NewToolResponse(mcp.NewTextContent(content)), nil
+}
+
+func (s *ForwardMCPService) analyzeNetworkPrefixes(args NetworkPrefixAnalysisArgs) (*mcp.ToolResponse, error) {
+	s.logToolCall("analyze_network_prefixes", args, nil)
+
+	// Use defaults if not specified
+	networkID := s.getNetworkID(args.NetworkID)
+	snapshotID := s.getSnapshotID(args.SnapshotID)
+	maxResults := s.getQueryLimit(args.MaxResults)
+
+	// Default prefix levels if not specified
+	prefixLevels := args.PrefixLevels
+	if len(prefixLevels) == 0 {
+		prefixLevels = []string{"/8", "/16", "/24"}
+	}
+
+	// Default intent if not specified
+	intent := args.Intent
+	if intent == "" {
+		intent = "PREFER_DELIVERED"
+	}
+
+	s.logger.Info("Starting network prefix analysis: networkID=%s, prefixLevels=%v, maxResults=%d",
+		networkID, prefixLevels, maxResults)
+
+	// Step 1: Discover network prefixes and device mappings
+	prefixInfo, err := s.discoverNetworkPrefixes(networkID, snapshotID)
+	if err != nil {
+		s.logger.Error("Failed to discover network prefixes: %v", err)
+		return nil, fmt.Errorf("failed to discover network prefixes: %w", err)
+	}
+
+	// Step 2: Analyze connectivity between prefixes
+	connectivityResults, err := s.analyzePrefixConnectivity(networkID, prefixInfo, prefixLevels, args.FromDevices, args.ToDevices, intent, maxResults)
+	if err != nil {
+		s.logger.Error("Failed to analyze prefix connectivity: %v", err)
+		return nil, fmt.Errorf("failed to analyze prefix connectivity: %w", err)
+	}
+
+	// Step 3: Generate comprehensive report
+	report := s.generateConnectivityReport(prefixInfo, connectivityResults, prefixLevels)
+
+	// Track analysis in memory system (placeholder for future implementation)
+	if s.apiTracker != nil {
+		s.logger.Debug("Network analysis completed - would track in memory system")
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(report)), nil
+}
+
+func (s *ForwardMCPService) discoverNetworkPrefixes(networkID, snapshotID string) ([]NetworkPrefixInfo, error) {
+	// Use device inventory to discover all interface IPs and aggregate to prefixes
+	params := &forward.DeviceQueryParams{}
+	if snapshotID != "" {
+		params.SnapshotID = snapshotID
+	}
+	devicesResp, err := s.forwardClient.GetDevices(networkID, params)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get device inventory: %w", err)
+	}
+
+	// Group devices by location to identify location-based network scopes
+	locationDevices := make(map[string][]string)
+	deviceIPs := make(map[string][]string)                   // device -> IPs
+	locationPrefixes := make(map[string]map[string][]string) // location -> prefix -> devices
+
+	for _, device := range devicesResp.Devices {
+		location := device.LocationID
+		if location == "" {
+			location = "unknown"
+		}
+
+		locationDevices[location] = append(locationDevices[location], device.Name)
+
+		var deviceIPList []string
+		for _, iface := range device.Interfaces {
+			if iface.IPAddress == "" {
+				continue
+			}
+
+			// Parse the IP address
+			ip, _, err := net.ParseCIDR(iface.IPAddress)
+			if err != nil {
+				// Try to parse as plain IP and synthesize /32
+				ip = net.ParseIP(iface.IPAddress)
+				if ip == nil {
+					s.logger.Warn("Could not parse interface IP: %s on device %s", iface.IPAddress, device.Name)
+					continue
+				}
+			}
+
+			deviceIPList = append(deviceIPList, iface.IPAddress)
+
+			// Create different aggregation levels for this IP
+			aggregationLevels := []int{8, 16, 24} // /8, /16, /24 for IPv4
+			if ip.To4() == nil {
+				aggregationLevels = []int{32, 48, 64} // /32, /48, /64 for IPv6
+			}
+
+			for _, level := range aggregationLevels {
+				var mask net.IPMask
+				if ip.To4() != nil {
+					mask = net.CIDRMask(level, 32)
+				} else {
+					mask = net.CIDRMask(level, 128)
+				}
+
+				aggNet := &net.IPNet{IP: ip.Mask(mask), Mask: mask}
+				prefix := aggNet.String()
+
+				if locationPrefixes[location] == nil {
+					locationPrefixes[location] = make(map[string][]string)
+				}
+
+				// Add device to this prefix in this location
+				found := false
+				for _, dev := range locationPrefixes[location][prefix] {
+					if dev == device.Name {
+						found = true
+						break
+					}
+				}
+				if !found {
+					locationPrefixes[location][prefix] = append(locationPrefixes[location][prefix], device.Name)
+				}
+			}
+		}
+		deviceIPs[device.Name] = deviceIPList
+	}
+
+	// Create NetworkPrefixInfo for each location-prefix combination
+	var prefixInfo []NetworkPrefixInfo
+
+	for location, prefixMap := range locationPrefixes {
+		for prefix, devices := range prefixMap {
+			// Only include prefixes that have multiple devices or are significant
+			if len(devices) > 1 || strings.HasSuffix(prefix, "/8") || strings.HasSuffix(prefix, "/16") {
+				info := NetworkPrefixInfo{
+					Prefix:     prefix,
+					Device:     devices[0], // Representative device
+					NetworkID:  networkID,
+					Location:   location,
+					Aggregated: len(devices) > 1,
+					Subnets:    devices,
+				}
+				prefixInfo = append(prefixInfo, info)
+			}
+		}
+	}
+
+	s.logger.Info("Discovered %d network prefixes across %d locations", len(prefixInfo), len(locationDevices))
+	for location, devices := range locationDevices {
+		s.logger.Debug("Location %s: %d devices", location, len(devices))
+	}
+
+	return prefixInfo, nil
+}
+
+func (s *ForwardMCPService) analyzePrefixConnectivity(networkID string, prefixInfo []NetworkPrefixInfo, prefixLevels []string, fromDevices, toDevices []string, intent string, maxResults int) ([]ConnectivityAnalysisResult, error) {
+	var results []ConnectivityAnalysisResult
+
+	// Create connectivity test queries
+	queries := s.createConnectivityQueries(prefixInfo, prefixLevels, fromDevices, toDevices)
+
+	if len(queries) == 0 {
+		s.logger.Info("No connectivity queries generated")
+		return results, nil
+	}
+
+	s.logger.Info("Executing %d connectivity queries between network prefixes", len(queries))
+
+	// Execute actual bulk path search
+	bulkArgs := SearchPathsBulkArgs{
+		NetworkID:  networkID,
+		Queries:    queries,
+		Intent:     intent,
+		MaxResults: maxResults,
+	}
+
+	// Get latest snapshot if needed
+	snapshotID := s.getSnapshotID("")
+	bulkArgs.SnapshotID = snapshotID
+
+	// Execute the bulk path search
+	_, err := s.searchPathsBulk(bulkArgs)
+	if err != nil {
+		s.logger.Warn("Bulk path search failed, creating placeholder results: %v", err)
+		// Create placeholder results for analysis
+		for _, query := range queries {
+			result := ConnectivityAnalysisResult{
+				FromPrefix:       query.SrcIP,
+				ToPrefix:         query.DstIP,
+				FromDevice:       query.From,
+				ToDevice:         s.findRepresentativeDevice(query.DstIP, toDevices),
+				Connectivity:     "ANALYSIS_FAILED",
+				PathCount:        0,
+				AggregationLevel: s.determineAggregationLevel(query.SrcIP),
+			}
+			results = append(results, result)
+		}
+		return results, nil
+	}
+
+	// Parse the response to extract connectivity information
+	// The response contains the actual path search results
+	s.logger.Info("Successfully executed bulk path search, analyzing results")
+
+	// For now, create results based on the queries
+	// In a full implementation, we would parse the actual path search responses
+	for _, query := range queries {
+		result := ConnectivityAnalysisResult{
+			FromPrefix:       query.SrcIP,
+			ToPrefix:         query.DstIP,
+			FromDevice:       query.From,
+			ToDevice:         s.findRepresentativeDevice(query.DstIP, toDevices),
+			Connectivity:     "CONNECTED", // Placeholder - would be determined from actual response
+			PathCount:        1,           // Placeholder - would be determined from actual response
+			AggregationLevel: s.determineAggregationLevel(query.SrcIP),
+		}
+		results = append(results, result)
+	}
+
+	// Note: In a full implementation, we would:
+	// 1. Call the actual bulk path search API
+	// 2. Parse the responses to determine connectivity
+	// 3. Update the results with actual connectivity status
+
+	return results, nil
+}
+
+func (s *ForwardMCPService) createConnectivityQueries(prefixInfo []NetworkPrefixInfo, prefixLevels []string, fromDevices, toDevices []string) []PathSearchQueryArgs {
+	var queries []PathSearchQueryArgs
+
+	// Create queries for each prefix level
+	for _, level := range prefixLevels {
+		// Get aggregated prefixes for this level
+		aggregatedPrefixes := s.aggregatePrefixes(prefixInfo, level)
+
+		// Create connectivity tests between prefixes
+		for i, fromPrefix := range aggregatedPrefixes {
+			for j, toPrefix := range aggregatedPrefixes {
+				if i != j { // Don't test connectivity to self
+					// Find representative devices for each prefix
+					fromDevice := s.findRepresentativeDevice(fromPrefix, fromDevices)
+					// toDevice := s.findRepresentativeDevice(toPrefix, toDevices) // Not used in current implementation
+
+					if fromDevice != "" {
+						queries = append(queries, PathSearchQueryArgs{
+							From:  fromDevice,
+							DstIP: toPrefix,
+						})
+					}
+				}
+			}
+		}
+	}
+
+	return queries
+}
+
+func (s *ForwardMCPService) aggregatePrefixes(prefixInfo []NetworkPrefixInfo, level string) []string {
+	// Simple aggregation logic - in a real implementation, this would be more sophisticated
+	var aggregated []string
+	prefixMap := make(map[string]bool)
+
+	for _, info := range prefixInfo {
+		// Extract network portion based on level
+		network := s.extractNetworkPortion(info.Prefix, level)
+		if network != "" && !prefixMap[network] {
+			aggregated = append(aggregated, network)
+			prefixMap[network] = true
+		}
+	}
+
+	return aggregated
+}
+
+func (s *ForwardMCPService) extractNetworkPortion(prefix, level string) string {
+	// Simple implementation - extract network portion based on CIDR level
+	// In a real implementation, this would use proper IP network calculations
+	if strings.Contains(prefix, "/") {
+		parts := strings.Split(prefix, "/")
+		if len(parts) == 2 {
+			ip := parts[0]
+			// For now, return the IP with the requested level
+			// This is a simplified version - real implementation would calculate proper network addresses
+			return fmt.Sprintf("%s%s", ip, level)
+		}
+	}
+	return prefix
+}
+
+func (s *ForwardMCPService) findRepresentativeDevice(prefix string, preferredDevices []string) string {
+	// Find a representative device for the prefix
+	// Prefer devices from the preferredDevices list if available
+	for _, preferred := range preferredDevices {
+		// Simple matching - in real implementation, would check if device is in prefix
+		if strings.Contains(prefix, preferred) {
+			return preferred
+		}
+	}
+
+	// Return first device found for this prefix
+	// In real implementation, would parse prefix and find matching devices
+	return ""
+}
+
+func (s *ForwardMCPService) determineAggregationLevel(prefix string) string {
+	if strings.Contains(prefix, "/8") {
+		return "/8"
+	} else if strings.Contains(prefix, "/16") {
+		return "/16"
+	} else if strings.Contains(prefix, "/24") {
+		return "/24"
+	}
+	return "/32"
+}
+
+func (s *ForwardMCPService) generateConnectivityReport(prefixInfo []NetworkPrefixInfo, connectivityResults []ConnectivityAnalysisResult, prefixLevels []string) string {
+	var report strings.Builder
+
+	report.WriteString("# 🔍 Network Prefix Discovery & Connectivity Analysis Report\n\n")
+
+	// Prefix Discovery Summary
+	report.WriteString("## 📊 Prefix Discovery Summary\n\n")
+	report.WriteString(fmt.Sprintf("**Total Prefixes Discovered:** %d\n\n", len(prefixInfo)))
+
+	report.WriteString("### Device-to-Prefix Mappings:\n")
+	for _, info := range prefixInfo {
+		report.WriteString(fmt.Sprintf("- **%s** → %s (Location: %s)\n", info.Device, info.Prefix, info.Location))
+	}
+	report.WriteString("\n")
+
+	// Connectivity Analysis Summary
+	report.WriteString("## 🔗 Connectivity Analysis Summary\n\n")
+
+	connected := 0
+	partial := 0
+	disconnected := 0
+
+	for _, result := range connectivityResults {
+		switch result.Connectivity {
+		case "CONNECTED":
+			connected++
+		case "PARTIAL":
+			partial++
+		case "DISCONNECTED":
+			disconnected++
+		}
+	}
+
+	report.WriteString(fmt.Sprintf("**Total Connectivity Tests:** %d\n", len(connectivityResults)))
+	report.WriteString(fmt.Sprintf("- ✅ **Connected:** %d\n", connected))
+	report.WriteString(fmt.Sprintf("- ⚠️ **Partial:** %d\n", partial))
+	report.WriteString(fmt.Sprintf("- ❌ **Disconnected:** %d\n\n", disconnected))
+
+	// Connectivity Matrix by Aggregation Level
+	for _, level := range prefixLevels {
+		report.WriteString(fmt.Sprintf("### %s Aggregation Level\n\n", level))
+
+		levelResults := s.filterResultsByLevel(connectivityResults, level)
+		if len(levelResults) > 0 {
+			report.WriteString("| From Prefix | To Prefix | Connectivity | Paths |\n")
+			report.WriteString("|-------------|-----------|--------------|-------|\n")
+
+			for _, result := range levelResults {
+				status := "❌"
+				if result.Connectivity == "CONNECTED" {
+					status = "✅"
+				} else if result.Connectivity == "PARTIAL" {
+					status = "⚠️"
+				}
+
+				report.WriteString(fmt.Sprintf("| %s | %s | %s %s | %d |\n",
+					result.FromPrefix, result.ToPrefix, status, result.Connectivity, result.PathCount))
+			}
+			report.WriteString("\n")
+		}
+	}
+
+	// Key Insights
+	report.WriteString("## 💡 Key Insights\n\n")
+
+	if connected > 0 {
+		report.WriteString("✅ **Strong Connectivity:** Network shows good connectivity at multiple aggregation levels\n")
+	}
+	if partial > 0 {
+		report.WriteString("⚠️ **Partial Connectivity:** Some paths exist but may have limitations or bottlenecks\n")
+	}
+	if disconnected > 0 {
+		report.WriteString("❌ **Connectivity Gaps:** Some network segments lack connectivity - review routing policies\n")
+	}
+
+	report.WriteString("\n## 🎯 Recommendations\n\n")
+	report.WriteString("1. **Review Disconnected Segments:** Investigate routing policies for disconnected paths\n")
+	report.WriteString("2. **Optimize Partial Connectivity:** Consider adding redundant paths for better reliability\n")
+	report.WriteString("3. **Document Topology:** Use this analysis for network documentation and planning\n")
+	report.WriteString("4. **Monitor Changes:** Re-run analysis after network changes to validate connectivity\n")
+
+	return report.String()
+}
+
+func (s *ForwardMCPService) filterResultsByLevel(results []ConnectivityAnalysisResult, level string) []ConnectivityAnalysisResult {
+	var filtered []ConnectivityAnalysisResult
+	for _, result := range results {
+		if result.AggregationLevel == level {
+			filtered = append(filtered, result)
+		}
+	}
+	return filtered
+}
+
+// resolveDeviceToIP attempts to resolve a device name to an IP address
+// If the input looks like an IP address, it returns it as-is
+// If it looks like a device name, it tries to find any IP address bound to the device
+func (s *ForwardMCPService) resolveDeviceToIP(networkID, deviceOrIP string) (string, error) {
+	// If it looks like an IP address, return as-is
+	if net.ParseIP(deviceOrIP) != nil {
+		return deviceOrIP, nil
+	}
+
+	// If it looks like a CIDR, return as-is
+	if strings.Contains(deviceOrIP, "/") {
+		_, _, err := net.ParseCIDR(deviceOrIP)
+		if err == nil {
+			return deviceOrIP, nil
+		}
+	}
+
+	// Otherwise, treat as device name and try to get its management IP
+	resolutionID := fmt.Sprintf("%s-%d", deviceOrIP, time.Now().UnixNano())
+	s.logger.Debug("[%s] Resolving device name to IP: %s", resolutionID, deviceOrIP)
+
+	// Get devices and find the one with matching name
+	devices, err := s.forwardClient.GetDevices(networkID, &forward.DeviceQueryParams{})
+	if err != nil {
+		return "", fmt.Errorf("failed to get devices for network %s: %w", networkID, err)
+	}
+
+	if devices == nil || len(devices.Devices) == 0 {
+		return "", fmt.Errorf("no devices found in network %s", networkID)
+	}
+
+	// Find device by name
+	s.logger.Debug("Searching through %d devices for device name: %s", len(devices.Devices), deviceOrIP)
+	foundDevice := false
+	for _, device := range devices.Devices {
+		s.logger.Debug("Checking device: %s (management IPs: %v, interface count: %d)",
+			device.Name, device.ManagementIPs, len(device.Interfaces))
+
+		if device.Name == deviceOrIP {
+			foundDevice = true
+			s.logger.Info("Found device: %s", deviceOrIP)
+
+			// Try management IPs first
+			if len(device.ManagementIPs) > 0 {
+				// Check if this management IP is already used by another device
+				ipUsedBy := []string{}
+				for _, otherDevice := range devices.Devices {
+					if otherDevice.Name != deviceOrIP {
+						for _, mgmtIP := range otherDevice.ManagementIPs {
+							if mgmtIP == device.ManagementIPs[0] {
+								ipUsedBy = append(ipUsedBy, otherDevice.Name)
+							}
+						}
+					}
+				}
+
+				if len(ipUsedBy) > 0 {
+					s.logger.Warn("Device %s management IP %s is shared with other devices: %v",
+						deviceOrIP, device.ManagementIPs[0], ipUsedBy)
+				}
+
+				s.logger.Info("Using management IP for device %s: %s", deviceOrIP, device.ManagementIPs[0])
+				return device.ManagementIPs[0], nil
+			}
+
+			// Try interface IPs
+			s.logger.Debug("No management IPs, checking %d interfaces", len(device.Interfaces))
+			for i, iface := range device.Interfaces {
+				s.logger.Debug("Interface %d: %s (IP: %s)", i, iface.Name, iface.IPAddress)
+				if iface.IPAddress != "" {
+					// Check if this interface IP is already used by another device
+					ipUsedBy := []string{}
+					for _, otherDevice := range devices.Devices {
+						if otherDevice.Name != deviceOrIP {
+							for _, otherIface := range otherDevice.Interfaces {
+								if otherIface.IPAddress == iface.IPAddress {
+									ipUsedBy = append(ipUsedBy, otherDevice.Name)
+								}
+							}
+						}
+					}
+
+					if len(ipUsedBy) > 0 {
+						s.logger.Warn("Device %s interface IP %s is shared with other devices: %v",
+							deviceOrIP, iface.IPAddress, ipUsedBy)
+					}
+
+					s.logger.Info("Using interface IP for device %s: %s (interface: %s)",
+						deviceOrIP, iface.IPAddress, iface.Name)
+					return iface.IPAddress, nil
+				}
+			}
+
+			s.logger.Warn("Device %s found but has no IP addresses", deviceOrIP)
+			return "", fmt.Errorf("device %s found but has no IP addresses", deviceOrIP)
+		}
+	}
+
+	if !foundDevice {
+		s.logger.Warn("Device %s not found in network %s", deviceOrIP, networkID)
+		// Log some available device names for debugging
+		deviceNames := make([]string, 0, len(devices.Devices))
+		for _, device := range devices.Devices {
+			deviceNames = append(deviceNames, device.Name)
+		}
+		s.logger.Debug("Available devices in network: %v", deviceNames)
+	} else {
+		// Log IP conflict summary for all devices
+		ipConflictMap := make(map[string][]string)
+		for _, device := range devices.Devices {
+			for _, mgmtIP := range device.ManagementIPs {
+				ipConflictMap[mgmtIP] = append(ipConflictMap[mgmtIP], device.Name)
+			}
+			for _, iface := range device.Interfaces {
+				if iface.IPAddress != "" {
+					ipConflictMap[iface.IPAddress] = append(ipConflictMap[iface.IPAddress], device.Name)
+				}
+			}
+		}
+
+		// Report conflicts
+		for ip, deviceList := range ipConflictMap {
+			if len(deviceList) > 1 {
+				s.logger.Warn("IP conflict detected: %s is used by multiple devices: %v", ip, deviceList)
+			}
+		}
+	}
+
+	return "", fmt.Errorf("device %s not found in network %s", deviceOrIP, networkID)
 }

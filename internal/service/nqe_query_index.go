@@ -6,6 +6,7 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -14,18 +15,19 @@ import (
 	"github.com/forward-mcp/internal/logger"
 )
 
-// NQEQueryIndex represents a query in the NQE library with AI-powered search capabilities
+// NQEQueryIndexEntry represents a query in the NQE library with AI-powered search capabilities
 type NQEQueryIndexEntry struct {
-	QueryID     string    `json:"queryId"`
-	Path        string    `json:"path"`
-	Intent      string    `json:"intent"`
-	Description string    `json:"description"` // Add this field for extracted @description
-	Code        string    `json:"code"`
-	Category    string    `json:"category"`
-	Subcategory string    `json:"subcategory"`
-	Repository  string    `json:"repository"` // Track which repository this query comes from
-	Embedding   []float32 `json:"embedding,omitempty"`
-	LastUpdated time.Time `json:"lastUpdated"`
+	QueryID      string    `json:"queryId"`
+	Path         string    `json:"path"`
+	Intent       string    `json:"intent"`
+	Description  string    `json:"description"` // Add this field for extracted @description
+	Code         string    `json:"code"`
+	Category     string    `json:"category"`
+	Subcategory  string    `json:"subcategory"`
+	Repository   string    `json:"repository"` // Track which repository this query comes from
+	Embedding    []float32 `json:"embedding,omitempty"`
+	LastUpdated  time.Time `json:"lastUpdated"`
+	IsStrongMeta bool      `json:"isStrongMeta"` // New: flag for strong metadata
 }
 
 // NQEQueryIndex manages the searchable index of NQE queries
@@ -211,54 +213,41 @@ func (idx *NQEQueryIndex) LoadFromQueries(queries []forward.NQEQueryDetail) erro
 			subcategory = segments[1]
 		}
 
-		// Prioritize embedding text: Intent+Description > Intent > Description > Path
+		// Improved: Use both intent and description if available, else fallback
 		embeddingText := ""
 		switch {
 		case intent != "" && desc != "":
 			embeddingText = intent + " | " + desc
-			idx.logger.Debug("Embedding for %s: using Intent+Description", query.QueryID)
 		case intent != "":
 			embeddingText = intent
-			idx.logger.Debug("Embedding for %s: using Intent only", query.QueryID)
 		case desc != "":
 			embeddingText = desc
-			idx.logger.Debug("Embedding for %s: using Description only", query.QueryID)
 		default:
 			embeddingText = path
-			idx.logger.Debug("Embedding for %s: using Path only", query.QueryID)
 		}
 
+		isStrong := intent != "" && len(intent) >= 10 && desc != "" && len(desc) >= 10
 		entry := &NQEQueryIndexEntry{
-			QueryID:     query.QueryID,
-			Path:        query.Path,
-			Intent:      intent,
-			Description: desc,
-			Code:        query.SourceCode,
-			Category:    category,
-			Subcategory: subcategory,
-			Repository:  query.Repository,
-			LastUpdated: time.Now(),
+			QueryID:      query.QueryID,
+			Path:         query.Path,
+			Intent:       intent,
+			Description:  desc,
+			Code:         embeddingText, // Use embedding text for embedding
+			Category:     category,
+			Subcategory:  subcategory,
+			Repository:   query.Repository,
+			LastUpdated:  time.Now(),
+			IsStrongMeta: isStrong,
 		}
-		// Store the embedding text for later use (e.g., in embedding generation)
-		entry.Code = embeddingText // Overload Code field for embedding text, or add a new field if preferred
-
-		// Prioritization for search order (strong metadata first)
-		isStrong := intent != "" && desc != "" && len(intent) >= 10 && len(desc) >= 10
 		if isStrong {
 			strongMeta = append(strongMeta, entry)
 		} else {
 			weakMeta = append(weakMeta, entry)
 		}
 	}
-	// Prioritize strong metadata queries by putting them first
 	filtered := append(strongMeta, weakMeta...)
 	idx.queries = filtered
-	idx.logger.Info("Loaded %d NQE queries into search index from database (%d prioritized for strong metadata)", len(filtered), len(strongMeta))
-
-	// Skip loading old embeddings cache - we're using database data now
-	// Embeddings can be generated on-demand if needed for semantic search
-	idx.logger.Debug("Using database-first approach - embeddings will be generated on-demand if needed")
-
+	idx.logger.Info("Loaded %d NQE queries into search index from database (%d strong, %d weak)", len(filtered), len(strongMeta), len(weakMeta))
 	return nil
 }
 
@@ -270,37 +259,40 @@ func (idx *NQEQueryIndex) LoadFromMockData() error {
 	// Create mock queries for testing
 	mockQueries := []*NQEQueryIndexEntry{
 		{
-			QueryID:     "FQ_ac651cb2901b067fe7dbfb511613ab44776d8029",
-			Path:        "/L3/Basic/All Devices",
-			Intent:      "List all devices in the network",
-			Description: "This query retrieves a list of all devices connected to the network, including their names and platforms.",
-			Code:        "SELECT device_name, platform FROM devices",
-			Category:    "L3",
-			Subcategory: "Basic",
-			Repository:  "ORG",
-			LastUpdated: time.Now(),
+			QueryID:      "FQ_ac651cb2901b067fe7dbfb511613ab44776d8029",
+			Path:         "/L3/Basic/All Devices",
+			Intent:       "List all devices in the network",
+			Description:  "This query retrieves a list of all devices connected to the network, including their names and platforms.",
+			Code:         "SELECT device_name, platform FROM devices",
+			Category:     "L3",
+			Subcategory:  "Basic",
+			Repository:   "ORG",
+			LastUpdated:  time.Now(),
+			IsStrongMeta: true,
 		},
 		{
-			QueryID:     "FQ_test_hardware_query",
-			Path:        "/Hardware/Basic/Device Hardware",
-			Intent:      "Show device hardware information",
-			Description: "This query displays detailed hardware information for a specific device, including its name, model, and serial number.",
-			Code:        "SELECT device_name, model, serial_number FROM device_hardware",
-			Category:    "Hardware",
-			Subcategory: "Basic",
-			Repository:  "FWD",
-			LastUpdated: time.Now(),
+			QueryID:      "FQ_test_hardware_query",
+			Path:         "/Hardware/Basic/Device Hardware",
+			Intent:       "Show device hardware information",
+			Description:  "This query displays detailed hardware information for a specific device, including its name, model, and serial number.",
+			Code:         "SELECT device_name, model, serial_number FROM device_hardware",
+			Category:     "Hardware",
+			Subcategory:  "Basic",
+			Repository:   "FWD",
+			LastUpdated:  time.Now(),
+			IsStrongMeta: false,
 		},
 		{
-			QueryID:     "FQ_test_security_query",
-			Path:        "/Security/Basic/ACL Analysis",
-			Intent:      "Analyze access control lists",
-			Description: "This query analyzes access control lists (ACLs) across the network to identify potential security vulnerabilities and misconfigurations.",
-			Code:        "SELECT device_name, acl_name, rule_count FROM acls",
-			Category:    "Security",
-			Subcategory: "Basic",
-			Repository:  "ORG",
-			LastUpdated: time.Now(),
+			QueryID:      "FQ_test_security_query",
+			Path:         "/Security/Basic/ACL Analysis",
+			Intent:       "Analyze access control lists",
+			Description:  "This query analyzes access control lists (ACLs) across the network to identify potential security vulnerabilities and misconfigurations.",
+			Code:         "SELECT device_name, acl_name, rule_count FROM acls",
+			Category:     "Security",
+			Subcategory:  "Basic",
+			Repository:   "ORG",
+			LastUpdated:  time.Now(),
+			IsStrongMeta: true,
 		},
 	}
 
@@ -464,7 +456,6 @@ func (idx *NQEQueryIndex) SearchQueries(searchText string, limit int) ([]*QueryS
 		return nil, fmt.Errorf("query index is empty - run LoadFromSpec() first")
 	}
 
-	// Count queries with embeddings
 	embeddedCount := 0
 	for _, query := range idx.queries {
 		if len(query.Embedding) > 0 {
@@ -472,70 +463,53 @@ func (idx *NQEQueryIndex) SearchQueries(searchText string, limit int) ([]*QueryS
 		}
 	}
 
-	// Always use embedding-based search if any queries have embeddings
 	if embeddedCount > 0 {
 		searchEmbedding64, err := idx.embeddingService.GenerateEmbedding(searchText)
 		if err != nil {
 			idx.logger.Debug("Failed to generate search embedding, falling back to keyword search: %v", err)
 			return idx.searchWithKeywords(searchText, limit)
 		}
-
 		searchEmbedding := make([]float32, len(searchEmbedding64))
 		for i, v := range searchEmbedding64 {
 			searchEmbedding[i] = float32(v)
 		}
-
-		var results []*QuerySearchResult
-
+		var strongResults, weakResults []*QuerySearchResult
 		for _, query := range idx.queries {
 			if len(query.Embedding) == 0 {
-				continue // Only use queries with embeddings
+				continue
 			}
-			// Remove metadata filtering - include all queries with embeddings
 			similarity := calculateCosineSimilarity(searchEmbedding, query.Embedding)
-
-			// NEW: Boost foundational data queries for counting searches
-			if idx.isFoundationalDataQuery(query, strings.Fields(strings.ToLower(searchText))) {
-				similarity *= 1.5 // Boost by 50% for foundational queries
-				idx.logger.Debug("Boosted semantic similarity for foundational query %s: %.4f -> %.4f",
-					query.QueryID, similarity/1.5, similarity)
+			if query.IsStrongMeta {
+				similarity *= 1.2 // Boost for strong metadata
 			}
-
 			if similarity > 0.01 {
 				result := &QuerySearchResult{
 					NQEQueryIndexEntry: query,
 					SimilarityScore:    similarity,
 					MatchType:          "semantic",
 				}
-				results = append(results, result)
-			}
-		}
-
-		for i := 0; i < len(results); i++ {
-			for j := i + 1; j < len(results); j++ {
-				if results[i].SimilarityScore < results[j].SimilarityScore {
-					results[i], results[j] = results[j], results[i]
+				if query.IsStrongMeta {
+					strongResults = append(strongResults, result)
+				} else {
+					weakResults = append(weakResults, result)
 				}
 			}
 		}
-
-		maxDebug := 10
-		if len(results) < maxDebug {
-			maxDebug = len(results)
-		}
-		idx.logger.Debug("Top %d semantic matches for search '%s':", maxDebug, searchText)
-		for i := 0; i < maxDebug; i++ {
-			q := results[i]
-			idx.logger.Debug("  [%d] QueryID: %s | Path: %s | Intent: %s | Similarity: %.4f", i+1, q.QueryID, q.Path, q.Intent, q.SimilarityScore)
-		}
-
-		if limit > 0 && len(results) > limit {
+		// Sort both slices by similarity descending
+		sort.Slice(strongResults, func(i, j int) bool {
+			return strongResults[i].SimilarityScore > strongResults[j].SimilarityScore
+		})
+		sort.Slice(weakResults, func(i, j int) bool {
+			return weakResults[i].SimilarityScore > weakResults[j].SimilarityScore
+		})
+		// Merge, preferring strong results
+		results := append(strongResults, weakResults...)
+		if len(results) > limit {
 			results = results[:limit]
 		}
-
+		idx.logger.Debug("Semantic search: %d strong, %d weak in top %d results for '%s'", len(strongResults), len(weakResults), len(results), searchText)
 		return results, nil
 	}
-
 	// Only fall back to keyword-based search if no queries have embeddings
 	return idx.searchWithKeywords(searchText, limit)
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/forward-mcp/internal/config"
+	"github.com/forward-mcp/internal/instancelock"
 	"github.com/forward-mcp/internal/logger"
 	"github.com/forward-mcp/internal/service"
 	mcp "github.com/metoro-io/mcp-golang"
@@ -22,6 +23,37 @@ func main() {
 
 	// Create logger
 	logger.Info("Forward MCP Server starting...")
+
+	// Acquire instance lock to prevent multiple servers
+	lockDir := os.Getenv("FORWARD_LOCK_DIR")
+	if lockDir == "" {
+		lockDir = "/tmp"
+	}
+	instanceLock := instancelock.NewInstanceLock(lockDir)
+
+	// Check if another instance is already running
+	if running, pid, err := instancelock.CheckRunningInstance(lockDir); running {
+		logger.Fatalf("Another instance of Forward MCP Server is already running (PID: %d)", pid)
+	} else if err != nil {
+		logger.Error("Warning: Could not check for running instances: %v", err)
+	}
+
+	// Try to acquire the lock
+	logger.Debug("Acquiring instance lock at: %s", instanceLock.GetLockFilePath())
+	if err := instanceLock.Acquire(3, 500*time.Millisecond); err != nil {
+		logger.Fatalf("Failed to acquire instance lock: %v\nAnother instance may be running or starting up.", err)
+	}
+	logger.Debug("Instance lock acquired successfully")
+
+	// Ensure lock is released on exit
+	defer func() {
+		logger.Debug("Releasing instance lock...")
+		if err := instanceLock.Release(); err != nil {
+			logger.Error("Failed to release instance lock: %v", err)
+		} else {
+			logger.Debug("Instance lock released successfully")
+		}
+	}()
 
 	// Log essential environment configuration at INFO level
 	logger.Info("Environment initialized - API: %s", cfg.Forward.APIBaseURL)

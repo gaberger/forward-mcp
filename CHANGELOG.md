@@ -96,6 +96,20 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
 ## [Unreleased]
 
 ### Added
+- **Instance Lock Protection**: Prevent multiple MCP server instances from running simultaneously
+  - File-based locking mechanism using PID validation
+  - Automatic stale lock detection and cleanup
+  - Configurable lock directory via `FORWARD_LOCK_DIR` environment variable
+  - Comprehensive test suite for lock acquisition, release, and edge cases
+  - See `docs/INSTANCE_LOCK_GUIDE.md` for detailed documentation
+- **New API Function Tools**: Added 4 new MCP tools for enhanced management
+  - `delete_snapshot`: Delete network snapshots permanently
+  - `update_location`: Update location properties (name, description, coordinates)
+  - `delete_location`: Remove locations from networks
+  - `update_device_locations`: Bulk update device-location mappings
+  - See `docs/NEW_API_FUNCTIONS.md` for usage examples and workflows
+
+### Added
 - **SQLite Persistence for NQE Query Index**: Added SQLite database persistence to store NQE queries and embeddings locally for faster startup times between MCP runs
   - Queries are automatically cached in `data/nqe_queries.db` after first load
   - Loading strategy: Database → API → Spec file (with fallback)

@@ -486,6 +486,12 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 		return fmt.Errorf("failed to register get_latest_snapshot tool: %w", err)
 	}
 
+	if err := server.RegisterTool("delete_snapshot",
+		"Delete a network snapshot. Requires snapshot_id. WARNING: This permanently removes the snapshot and associated historical data. Use with caution for cleanup of old snapshots.",
+		s.deleteSnapshot); err != nil {
+		return fmt.Errorf("failed to register delete_snapshot tool: %w", err)
+	}
+
 	// Location Management Tools
 	if err := server.RegisterTool("list_locations",
 		"List locations in a network. Requires network_id. Returns physical locations with names and coordinates. Use to view network topology and organize devices by location.",
@@ -497,6 +503,24 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 		"Create a new location in a network. Requires network_id and location name. Optional description and coordinates. Use to set up new sites or data centers for device organization.",
 		s.createLocation); err != nil {
 		return fmt.Errorf("failed to register create_location tool: %w", err)
+	}
+
+	if err := server.RegisterTool("update_location",
+		"Update an existing location in a network. Requires network_id and location_id. Optional new name, description, latitude, and longitude. Use to modify location details.",
+		s.updateLocation); err != nil {
+		return fmt.Errorf("failed to register update_location tool: %w", err)
+	}
+
+	if err := server.RegisterTool("delete_location",
+		"Delete a location from a network. Requires network_id and location_id. Use to remove locations that are no longer needed.",
+		s.deleteLocation); err != nil {
+		return fmt.Errorf("failed to register delete_location tool: %w", err)
+	}
+
+	if err := server.RegisterTool("update_device_locations",
+		"Update device location assignments in bulk. Requires network_id and a map of device IDs to location IDs. Use to assign multiple devices to their physical locations efficiently.",
+		s.updateDeviceLocations); err != nil {
+		return fmt.Errorf("failed to register update_device_locations tool: %w", err)
 	}
 
 	// Default Settings Management Tools
@@ -1849,6 +1873,55 @@ func (s *ForwardMCPService) createLocation(args CreateLocationArgs) (*mcp.ToolRe
 
 	result, _ := json.MarshalIndent(newLocation, "", "  ")
 	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Location created successfully:\n%s", string(result)))), nil
+}
+
+func (s *ForwardMCPService) updateLocation(args UpdateLocationArgs) (*mcp.ToolResponse, error) {
+	s.logToolCall("update_location", args, nil)
+	update := &forward.LocationUpdate{
+		Name:        &args.Name,
+		Description: &args.Description,
+		Latitude:    args.Latitude,
+		Longitude:   args.Longitude,
+	}
+
+	updatedLocation, err := s.forwardClient.UpdateLocation(args.NetworkID, args.LocationID, update)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update location: %w", err)
+	}
+
+	result, _ := json.MarshalIndent(updatedLocation, "", "  ")
+	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Location updated successfully:\n%s", string(result)))), nil
+}
+
+func (s *ForwardMCPService) deleteLocation(args DeleteLocationArgs) (*mcp.ToolResponse, error) {
+	s.logToolCall("delete_location", args, nil)
+	deletedLocation, err := s.forwardClient.DeleteLocation(args.NetworkID, args.LocationID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete location: %w", err)
+	}
+
+	result, _ := json.MarshalIndent(deletedLocation, "", "  ")
+	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Location deleted successfully:\n%s", string(result)))), nil
+}
+
+func (s *ForwardMCPService) deleteSnapshot(args DeleteSnapshotArgs) (*mcp.ToolResponse, error) {
+	s.logToolCall("delete_snapshot", args, nil)
+	err := s.forwardClient.DeleteSnapshot(args.SnapshotID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to delete snapshot: %w", err)
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Snapshot %s deleted successfully", args.SnapshotID))), nil
+}
+
+func (s *ForwardMCPService) updateDeviceLocations(args UpdateDeviceLocationsArgs) (*mcp.ToolResponse, error) {
+	s.logToolCall("update_device_locations", args, nil)
+	err := s.forwardClient.UpdateDeviceLocations(args.NetworkID, args.Locations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update device locations: %w", err)
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Updated locations for %d devices", len(args.Locations)))), nil
 }
 
 // resolveNetworkIDByName resolves a network name to its networkId using a case-insensitive match.

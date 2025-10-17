@@ -1,12 +1,14 @@
 # Forward MCP
 
-**Version 2.1.0**
+**Version 2.2.0**
 
 Forward MCP is an open-source server that provides a set of tools and APIs for interacting with Forward Networks' platform. It enables automation, analysis, and integration with network data using the MCP protocol.
 
 ## Features
-- Exposes Forward Networks tools via the MCP protocol
+- Exposes Forward Networks tools via the MCP protocol (55+ tools)
 - Supports prompt workflows and contextual resources
+- **NEW**: Instance lock protection prevents multiple server instances
+- **NEW**: Additional API functions for snapshot, location, and device management
 - **NEW**: Bloomsearch integration for efficient handling of large NQE results
 - **NEW**: Automatic bloom filter generation for fast data filtering
 - **NEW**: Persistent bloom indexes for network analysis
@@ -43,6 +45,9 @@ Set the following environment variables before running:
 - `FORWARD_BLOOM_THRESHOLD` – (Optional, default: 100) Minimum result size to trigger bloom filter creation
 - `FORWARD_BLOOM_INDEX_PATH` – (Optional, default: data/bloom_indexes) Path for bloom index storage
 
+### Instance Lock Configuration (Optional)
+- `FORWARD_LOCK_DIR` – (Optional, default: /tmp) Directory for server instance lock file
+
 Run the server:
 ```sh
 ./forward-mcp
@@ -69,6 +74,8 @@ The server will start and listen for MCP protocol messages via stdio (compatible
 
 ## Documentation
 - See the `docs/` folder for troubleshooting, architecture, and advanced guides.
+- **NEW**: Instance lock protection guide - `docs/INSTANCE_LOCK_GUIDE.md`
+- **NEW**: New API functions guide - `docs/NEW_API_FUNCTIONS.md`
 - **NEW**: Bloomsearch integration guide and performance optimization tips.
 
 ## Contributing

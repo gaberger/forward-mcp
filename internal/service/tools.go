@@ -81,6 +81,10 @@ type GetLatestSnapshotArgs struct {
 	NetworkID string `json:"network_id" jsonschema:"required,description=ID of the network"`
 }
 
+type DeleteSnapshotArgs struct {
+	SnapshotID string `json:"snapshot_id" jsonschema:"required,description=ID of the snapshot to delete"`
+}
+
 // Location Management Tool Arguments
 type ListLocationsArgs struct {
 	NetworkID string `json:"network_id" jsonschema:"required,description=ID of the network"`
@@ -92,6 +96,25 @@ type CreateLocationArgs struct {
 	Description string   `json:"description,omitempty" jsonschema:"description=Description of the location"`
 	Latitude    *float64 `json:"latitude,omitempty" jsonschema:"description=Latitude coordinate"`
 	Longitude   *float64 `json:"longitude,omitempty" jsonschema:"description=Longitude coordinate"`
+}
+
+type UpdateLocationArgs struct {
+	NetworkID   string   `json:"network_id" jsonschema:"required,description=ID of the network"`
+	LocationID  string   `json:"location_id" jsonschema:"required,description=ID of the location to update"`
+	Name        string   `json:"name,omitempty" jsonschema:"description=New name for the location"`
+	Description string   `json:"description,omitempty" jsonschema:"description=New description for the location"`
+	Latitude    *float64 `json:"latitude,omitempty" jsonschema:"description=New latitude coordinate"`
+	Longitude   *float64 `json:"longitude,omitempty" jsonschema:"description=New longitude coordinate"`
+}
+
+type DeleteLocationArgs struct {
+	NetworkID  string `json:"network_id" jsonschema:"required,description=ID of the network"`
+	LocationID string `json:"location_id" jsonschema:"required,description=ID of the location to delete"`
+}
+
+type UpdateDeviceLocationsArgs struct {
+	NetworkID string            `json:"network_id" jsonschema:"required,description=ID of the network"`
+	Locations map[string]string `json:"locations" jsonschema:"required,description=Map of device IDs to location IDs"`
 }
 
 // First-Class Query Tool Arguments - Critical Network Operations

@@ -86,8 +86,9 @@ func (bim *BloomIndexManager) GetOrCreateEngine(entityID string) (*bloomsearch.B
 	}
 
 	// Create directory for this entity
+	// Security: Use restrictive permissions (owner-only access)
 	entityDir := filepath.Join(bim.baseDir, entityID)
-	if err := os.MkdirAll(entityDir, 0755); err != nil {
+	if err := os.MkdirAll(entityDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create entity directory: %w", err)
 	}
 

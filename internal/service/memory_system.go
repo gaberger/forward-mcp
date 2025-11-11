@@ -79,7 +79,8 @@ func NewMemorySystem(logger *logger.Logger, instanceID string) (*MemorySystem, e
 	}
 
 	// Create data directory if it doesn't exist
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	// Security: Use restrictive permissions (owner-only access)
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 

@@ -43,9 +43,8 @@ func main() {
 		logger.Info("Environment initialized - TLS verification: enabled")
 	}
 
-	logger.Debug("Config loaded - API URL: %s", cfg.Forward.APIBaseURL)
-	logger.Debug("API Key present: %v", cfg.Forward.APIKey != "")
-	logger.Debug("TLS Skip Verify: %v", cfg.Forward.InsecureSkipVerify)
+	// Security: Do not log sensitive configuration details even in debug mode
+	// Use INFO level logging above for configuration visibility
 
 	// Create Forward MCP service
 	logger.Debug("Creating Forward MCP service...")

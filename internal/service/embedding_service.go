@@ -2,7 +2,7 @@ package service
 
 import (
 	"bytes"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -121,9 +121,9 @@ func (m *MockEmbeddingService) GenerateEmbedding(text string) ([]float64, error)
 		return nil, fmt.Errorf("empty text provided")
 	}
 
-	// Generate a deterministic embedding based on text hash
+	// Generate a deterministic embedding based on text hash using SHA-256
 	// This ensures same input produces same output
-	hash := md5.Sum([]byte(text))
+	hash := sha256.Sum256([]byte(text))
 
 	// Create a 1536-dimensional embedding (standard OpenAI size)
 	embedding := make([]float64, 1536)
@@ -225,8 +225,8 @@ func (k *KeywordEmbeddingService) GenerateEmbedding(text string) ([]float64, err
 	lowerText := strings.ToLower(text)
 	words := strings.Fields(lowerText)
 
-	// Initialize with base hash for uniqueness
-	hash := md5.Sum([]byte(text))
+	// Initialize with base hash for uniqueness using SHA-256
+	hash := sha256.Sum256([]byte(text))
 	for i := range embedding {
 		byteIndex := i % len(hash)
 		embedding[i] = float64(hash[byteIndex]) / 1000.0
@@ -247,8 +247,8 @@ func (k *KeywordEmbeddingService) GenerateEmbedding(text string) ([]float64, err
 				}
 			}
 
-			// Add word-specific patterns
-			wordHash := md5.Sum([]byte(cleanWord))
+			// Add word-specific patterns using SHA-256
+			wordHash := sha256.Sum256([]byte(cleanWord))
 			for i := 0; i < len(embedding) && i < len(wordHash)*10; i++ {
 				embedding[i] += float64(wordHash[i/10]) * weight / 500.0
 			}
@@ -269,7 +269,7 @@ func (k *KeywordEmbeddingService) GenerateEmbedding(text string) ([]float64, err
 	// Add bigram features for better context
 	for i := 0; i < len(words)-1; i++ {
 		bigram := words[i] + " " + words[i+1]
-		bigramHash := md5.Sum([]byte(bigram))
+		bigramHash := sha256.Sum256([]byte(bigram))
 
 		// Distribute bigram influence
 		for j := 0; j < len(embedding) && j < len(bigramHash)*5; j++ {

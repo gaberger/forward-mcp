@@ -1,7 +1,7 @@
 package service
 
 import (
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"net/url"
 	"strings"
@@ -31,11 +31,11 @@ func GenerateInstanceID(apiBaseURL string) string {
 	return hashString(host)
 }
 
-// hashString creates a short, stable hash of a string
+// hashString creates a short, stable hash of a string using SHA-256
 func hashString(s string) string {
-	hasher := md5.New()
+	hasher := sha256.New()
 	hasher.Write([]byte(s))
 	hash := hex.EncodeToString(hasher.Sum(nil))
-	// Return first 8 characters for readability
-	return hash[:8]
+	// Return first 16 characters for better collision resistance while keeping it readable
+	return hash[:16]
 }

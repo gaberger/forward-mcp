@@ -60,13 +60,15 @@ func New() *Logger {
 // setupFileLogging configures file output for structured logs
 func (l *Logger) setupFileLogging(logPath string) error {
 	// Create log directory if it doesn't exist
+	// Security: Use restrictive permissions (owner-only access)
 	logDir := filepath.Dir(logPath)
-	if err := os.MkdirAll(logDir, 0755); err != nil {
+	if err := os.MkdirAll(logDir, 0700); err != nil {
 		return fmt.Errorf("failed to create log directory: %w", err)
 	}
 
 	// Open log file with append mode
-	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	// Security: Use restrictive file permissions (owner-only access)
+	file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0600)
 	if err != nil {
 		return fmt.Errorf("failed to open log file: %w", err)
 	}

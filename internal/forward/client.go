@@ -449,10 +449,11 @@ func (c *Client) makeRequest(method, endpoint string, body interface{}) (*http.R
 		}
 
 		// Log additional debugging information for 400 errors
+		// Security: Do not log request bodies as they may contain sensitive data
 		if resp.StatusCode == 400 {
 			debugLogger := logger.New()
-			debugLogger.Debug("400 Bad Request - URL: %s%s, Method: %s, Request Body: %s",
-				c.config.APIBaseURL, endpoint, method, string(reqBody))
+			debugLogger.Debug("400 Bad Request - URL: %s%s, Method: %s, Body Size: %d bytes",
+				c.config.APIBaseURL, endpoint, method, len(reqBody))
 		}
 
 		return nil, fmt.Errorf("%s", errorMsg)

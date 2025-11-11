@@ -36,7 +36,8 @@ func getWritableDataDirectory() (string, error) {
 		}
 
 		// Test if we can create the directory and write to it
-		if err := os.MkdirAll(dir, 0755); err == nil {
+		// Security: Use restrictive permissions (owner-only access)
+		if err := os.MkdirAll(dir, 0700); err == nil {
 			// Test write permission with a temporary file
 			testFile := filepath.Join(dir, ".write_test")
 			if file, err := os.Create(testFile); err == nil {
@@ -82,7 +83,8 @@ func NewNQEDatabase(logger *logger.Logger, instanceID string) (*NQEDatabase, err
 	logger.Info("Using database directory: %s", dataDir)
 
 	// Create data directory if it doesn't exist
-	if err := os.MkdirAll(dataDir, 0755); err != nil {
+	// Security: Use restrictive permissions (owner-only access)
+	if err := os.MkdirAll(dataDir, 0700); err != nil {
 		return nil, fmt.Errorf("failed to create data directory: %w", err)
 	}
 

@@ -3,7 +3,7 @@ package service
 import (
 	"bytes"
 	"compress/gzip"
-	"crypto/md5"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -151,8 +151,9 @@ func NewSemanticCache(embeddingService EmbeddingService, logger *logger.Logger, 
 	}
 
 	// Initialize disk cache directory if needed
+	// Security: Use restrictive permissions (owner-only access)
 	if sc.persistToDisk && sc.diskCachePath != "" {
-		if err := os.MkdirAll(sc.diskCachePath, 0755); err != nil {
+		if err := os.MkdirAll(sc.diskCachePath, 0700); err != nil {
 			logger.Warn("Failed to create disk cache directory %s: %v", sc.diskCachePath, err)
 			sc.persistToDisk = false
 		}
@@ -169,9 +170,9 @@ func NewSemanticCache(embeddingService EmbeddingService, logger *logger.Logger, 
 	return sc
 }
 
-// generateCacheKey creates a consistent cache key including instance partitioning
+// generateCacheKey creates a consistent cache key including instance partitioning using SHA-256
 func (sc *SemanticCache) generateCacheKey(query, networkID, snapshotID string) string {
-	hasher := md5.New()
+	hasher := sha256.New()
 	hasher.Write([]byte(fmt.Sprintf("%s|%s|%s|%s", sc.instanceID, query, networkID, snapshotID)))
 	return hex.EncodeToString(hasher.Sum(nil))
 }
@@ -841,7 +842,8 @@ func (sc *SemanticCache) saveToDisk(entry *CacheEntry) error {
 	}
 
 	// Create directory if it doesn't exist
-	if err := os.MkdirAll(filepath.Dir(filePath), 0755); err != nil {
+	// Security: Use restrictive permissions (owner-only access)
+	if err := os.MkdirAll(filepath.Dir(filePath), 0700); err != nil {
 		return fmt.Errorf("failed to create directory for disk cache: %w", err)
 	}
 

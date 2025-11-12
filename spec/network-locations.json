@@ -1,0 +1,1141 @@
+{
+  "openapi" : "3.1.0",
+  "info" : {
+    "title" : "Forward Networks: Network Locations API",
+    "description" : "Get, create, update, or delete a network's user defined locations",
+    "contact" : {
+      "email" : "support@forwardnetworks.com"
+    },
+    "license" : {
+      "name" : "MIT",
+      "url" : "https://spdx.org/licenses/MIT"
+    },
+    "version" : "25.9.7"
+  },
+  "servers" : [
+    {
+      "url" : "/"
+    }
+  ],
+  "tags" : [
+    {
+      "name" : "Network Locations",
+      "description" : "Location Controller"
+    }
+  ],
+  "paths" : {
+    "/api/networks/{networkId}/atlas" : {
+      "get" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Gets device locations",
+        "description" : "The response is a JSON object that maps device names to their location ids.\n\nSample response: `{\"atl-edge-fw01\": \"2\", \"ny-edge-fw2\": \"1\"}`",
+        "operationId" : "getAtlasUsingGET",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "object",
+                  "additionalProperties" : {
+                    "type" : "string"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      },
+      "patch" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Updates device locations",
+        "description" : "The request is a JSON object that maps device names to their new location ids.\n\nSample request: `{\"atl-edge-fw01\": \"2\", \"ny-edge-fw2\": \"1\"}`",
+        "operationId" : "updateAtlasUsingPATCH",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "object",
+                "additionalProperties" : {
+                  "type" : "string"
+                }
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No Content",
+            "content" : { }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      }
+    },
+    "/api/networks/{networkId}/locations" : {
+      "get" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Gets a network’s locations",
+        "operationId" : "getLocationsUsingGET",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/Location"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      },
+      "post" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Creates a network location",
+        "operationId" : "addLocationUsingPOST",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/NewLocation"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Location"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      },
+      "put" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Creates network locations",
+        "description" : "Creates multiple locations at once. Can be helpful when first setting up a network.\n\nFails (as a precautionary measure) with 409 Conflict if the network already has any network locations.",
+        "operationId" : "putLocationsUsingPUT",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "array",
+                "items" : {
+                  "$ref" : "#/components/schemas/Location"
+                }
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No Content",
+            "content" : { }
+          },
+          "409" : {
+            "description" : "Occurs (as a precautionary measure) if the network already has any network locations.",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/ErrorInfo"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      },
+      "patch" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Creates or updates network locations",
+        "description" : "Any patches that specify an existing location’s `id` will update the existing location. Any other patches will each create a new location. Patches are applied sequentially.",
+        "operationId" : "patchLocationsUsingPATCH",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "array",
+                "items" : {
+                  "$ref" : "#/components/schemas/LocationBulkPatch"
+                }
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No Content",
+            "content" : { }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      }
+    },
+    "/api/networks/{networkId}/locations/{locationId}" : {
+      "get" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Gets a network location",
+        "operationId" : "getLocationUsingGET",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "locationId",
+            "in" : "path",
+            "description" : "locationId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Location"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      },
+      "delete" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Deletes a network location",
+        "description" : "When a location with devices is deleted, all of its devices will be unassigned.",
+        "operationId" : "deleteLocationUsingDELETE",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "locationId",
+            "in" : "path",
+            "description" : "locationId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content",
+            "content" : { }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      },
+      "patch" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Updates a network location",
+        "description" : "All JSON properties in the request body are optional. Include only the properties you wish to change.",
+        "operationId" : "patchLocationUsingPATCH",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "locationId",
+            "in" : "path",
+            "description" : "locationId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/LocationPatch"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/Location"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      }
+    },
+    "/api/networks/{networkId}/locations/{locationId}/clusters" : {
+      "get" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Gets the device clusters at a location",
+        "operationId" : "getDeviceClustersUsingGET",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "locationId",
+            "in" : "path",
+            "description" : "locationId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "type" : "array",
+                  "items" : {
+                    "$ref" : "#/components/schemas/DeviceCluster"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      },
+      "post" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Creates a device cluster at a location",
+        "operationId" : "addDeviceClusterUsingPOST",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "locationId",
+            "in" : "path",
+            "description" : "locationId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DeviceCluster"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No Content",
+            "content" : { }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      },
+      "put" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Replaces all device clusters at a location",
+        "operationId" : "putDeviceClustersUsingPUT",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "locationId",
+            "in" : "path",
+            "description" : "locationId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "type" : "array",
+                "items" : {
+                  "$ref" : "#/components/schemas/DeviceCluster"
+                }
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No Content",
+            "content" : { }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      }
+    },
+    "/api/networks/{networkId}/locations/{locationId}/clusters/{clusterName}" : {
+      "get" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Gets a device cluster",
+        "operationId" : "getDeviceClusterUsingGET",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "locationId",
+            "in" : "path",
+            "description" : "locationId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "clusterName",
+            "in" : "path",
+            "description" : "clusterName",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "200" : {
+            "description" : "OK",
+            "content" : {
+              "application/json" : {
+                "schema" : {
+                  "$ref" : "#/components/schemas/DeviceCluster"
+                }
+              }
+            }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      },
+      "delete" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Deletes a device cluster",
+        "operationId" : "deleteDeviceClusterUsingDELETE",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "locationId",
+            "in" : "path",
+            "description" : "locationId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "clusterName",
+            "in" : "path",
+            "description" : "clusterName",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "responses" : {
+          "204" : {
+            "description" : "No Content",
+            "content" : { }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      },
+      "patch" : {
+        "tags" : [
+          "Network Locations"
+        ],
+        "summary" : "Updates a device cluster",
+        "description" : "All JSON properties in the request body are optional. Include only the properties you wish to change.",
+        "operationId" : "updateDeviceClusterUsingPATCH",
+        "parameters" : [
+          {
+            "name" : "networkId",
+            "in" : "path",
+            "description" : "networkId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "locationId",
+            "in" : "path",
+            "description" : "locationId",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          },
+          {
+            "name" : "clusterName",
+            "in" : "path",
+            "description" : "clusterName",
+            "required" : true,
+            "style" : "simple",
+            "explode" : false,
+            "schema" : {
+              "type" : "string"
+            }
+          }
+        ],
+        "requestBody" : {
+          "content" : {
+            "application/json" : {
+              "schema" : {
+                "$ref" : "#/components/schemas/DeviceClusterUpdate"
+              }
+            }
+          },
+          "required" : true
+        },
+        "responses" : {
+          "204" : {
+            "description" : "No Content",
+            "content" : { }
+          }
+        },
+        "deprecated" : false,
+        "security" : [
+          {
+            "api_token" : [ ]
+          }
+        ]
+      }
+    }
+  },
+  "components" : {
+    "schemas" : {
+      "DeviceCluster" : {
+        "required" : [
+          "devices",
+          "name"
+        ],
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "examples" : [
+              "atl-edge"
+            ]
+          },
+          "devices" : {
+            "type" : "array",
+            "examples" : [
+              [
+                "atl-edge-fw01",
+                "atl-edge-fw02",
+                "atl-isp-edge01",
+                "atl-isp-edge02"
+              ]
+            ],
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "DeviceClusterUpdate" : {
+        "type" : "object",
+        "properties" : {
+          "name" : {
+            "type" : "string",
+            "examples" : [
+              "atl-edge"
+            ]
+          },
+          "devices" : {
+            "type" : "array",
+            "examples" : [
+              [
+                "atl-edge-fw01",
+                "atl-edge-fw02",
+                "atl-isp-edge01",
+                "atl-isp-edge02"
+              ]
+            ],
+            "items" : {
+              "type" : "string"
+            }
+          }
+        }
+      },
+      "ErrorInfo" : {
+        "required" : [
+          "apiUrl",
+          "httpMethod",
+          "message"
+        ],
+        "type" : "object",
+        "properties" : {
+          "httpMethod" : {
+            "type" : "string",
+            "examples" : [
+              "GET"
+            ],
+            "enum" : [
+              "GET",
+              "HEAD",
+              "POST",
+              "PUT",
+              "PATCH",
+              "DELETE"
+            ]
+          },
+          "apiUrl" : {
+            "type" : "string",
+            "examples" : [
+              "/api/version"
+            ]
+          },
+          "message" : {
+            "type" : "string",
+            "description" : "A description of the error"
+          },
+          "reason" : {
+            "type" : "string"
+          }
+        }
+      },
+      "Location" : {
+        "required" : [
+          "id",
+          "lat",
+          "lng",
+          "name"
+        ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "examples" : [
+              "dyt-a"
+            ]
+          },
+          "name" : {
+            "type" : "string",
+            "examples" : [
+              "Dayton DC"
+            ]
+          },
+          "lat" : {
+            "type" : "number",
+            "description" : "A latitude (geographic coordinate), specified as an angle from -90 to +90 degrees",
+            "format" : "double",
+            "examples" : [
+              39.8113
+            ]
+          },
+          "lng" : {
+            "type" : "number",
+            "description" : "A longitude (geographic coordinate), specified as an angle from -180 to +180 degrees",
+            "format" : "double",
+            "examples" : [
+              -84.2722
+            ]
+          },
+          "city" : {
+            "type" : "string",
+            "description" : "Name of the closest city (for display purposes only). Required if `adminDivision` or `country` is specified.",
+            "examples" : [
+              "Dayton"
+            ]
+          },
+          "adminDivision" : {
+            "type" : "string",
+            "description" : "Name of the administrative division (district, province, region, state, territory, etc.) that `city` is in (for display purposes only)",
+            "examples" : [
+              "Ohio"
+            ]
+          },
+          "country" : {
+            "type" : "string",
+            "description" : "Name of the country that `city` is located in (for display purposes only). Required if `city` is specified.",
+            "examples" : [
+              "United States"
+            ]
+          }
+        }
+      },
+      "LocationBulkPatch" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "description" : "Identifier of the location to update. Required if `name` is absent.",
+            "examples" : [
+              "dyt-a"
+            ]
+          },
+          "name" : {
+            "type" : "string",
+            "description" : "Name of the location to update or create. Required if `id` is absent.",
+            "examples" : [
+              "Dayton DC"
+            ]
+          },
+          "lat" : {
+            "type" : "number",
+            "description" : "A latitude (geographic coordinate), specified as an angle from -90 to +90 degrees",
+            "format" : "double",
+            "examples" : [
+              39.8113
+            ]
+          },
+          "lng" : {
+            "type" : "number",
+            "description" : "A longitude (geographic coordinate), specified as an angle from -180 to +180 degrees",
+            "format" : "double",
+            "examples" : [
+              -84.2722
+            ]
+          },
+          "city" : {
+            "type" : "string",
+            "description" : "Name of the closest city (for display purposes only)",
+            "examples" : [
+              "Dayton"
+            ]
+          },
+          "adminDivision" : {
+            "type" : "string",
+            "description" : "Name of the administrative division (district, province, region, state, territory, etc.) that `city` is in (for display purposes only)",
+            "examples" : [
+              "Ohio"
+            ]
+          },
+          "country" : {
+            "type" : "string",
+            "description" : "Name of the country that `city` is located in (for display purposes only)",
+            "examples" : [
+              "United States"
+            ]
+          }
+        }
+      },
+      "LocationPatch" : {
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "examples" : [
+              "dyt-a"
+            ]
+          },
+          "name" : {
+            "type" : "string",
+            "examples" : [
+              "Dayton DC"
+            ]
+          },
+          "lat" : {
+            "type" : "number",
+            "description" : "A latitude (geographic coordinate), specified as an angle from -90 to +90 degrees",
+            "format" : "double",
+            "examples" : [
+              39.8113
+            ]
+          },
+          "lng" : {
+            "type" : "number",
+            "description" : "A longitude (geographic coordinate), specified as an angle from -180 to +180 degrees",
+            "format" : "double",
+            "examples" : [
+              -84.2722
+            ]
+          },
+          "city" : {
+            "type" : "string",
+            "description" : "Name of the closest city (for display purposes only)",
+            "examples" : [
+              "Dayton"
+            ]
+          },
+          "adminDivision" : {
+            "type" : "string",
+            "description" : "Name of the administrative division (district, province, region, state, territory, etc.) that `city` is in (for display purposes only)",
+            "examples" : [
+              "Ohio"
+            ]
+          },
+          "country" : {
+            "type" : "string",
+            "description" : "Name of the country that `city` is located in (for display purposes only)",
+            "examples" : [
+              "United States"
+            ]
+          }
+        }
+      },
+      "NewLocation" : {
+        "required" : [
+          "lat",
+          "lng",
+          "name"
+        ],
+        "type" : "object",
+        "properties" : {
+          "id" : {
+            "type" : "string",
+            "description" : "If absent or null, a numeric identifier will be assigned",
+            "examples" : [
+              "dyt-a"
+            ]
+          },
+          "name" : {
+            "type" : "string",
+            "examples" : [
+              "Dayton DC"
+            ]
+          },
+          "lat" : {
+            "type" : "number",
+            "description" : "A latitude (geographic coordinate), specified as an angle from -90 to +90 degrees",
+            "format" : "double",
+            "examples" : [
+              39.8113
+            ]
+          },
+          "lng" : {
+            "type" : "number",
+            "description" : "A longitude (geographic coordinate), specified as an angle from -180 to +180 degrees",
+            "format" : "double",
+            "examples" : [
+              -84.2722
+            ]
+          },
+          "city" : {
+            "type" : "string",
+            "description" : "Name of the closest city (for display purposes only). Required if `adminDivision` or `country` is specified.",
+            "examples" : [
+              "Dayton"
+            ]
+          },
+          "adminDivision" : {
+            "type" : "string",
+            "description" : "Name of the administrative division (district, province, region, state, territory, etc.) that `city` is in (for display purposes only)",
+            "examples" : [
+              "Ohio"
+            ]
+          },
+          "country" : {
+            "type" : "string",
+            "description" : "Name of the country that `city` is located in (for display purposes only). Required if `city` is specified.",
+            "examples" : [
+              "United States"
+            ]
+          }
+        }
+      }
+    },
+    "securitySchemes" : {
+      "api_token" : {
+        "type" : "http",
+        "scheme" : "basic"
+      }
+    }
+  }
+}

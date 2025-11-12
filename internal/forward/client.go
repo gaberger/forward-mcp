@@ -68,6 +68,7 @@ type ClientInterface interface {
 	// Location operations
 	GetLocations(networkID string) ([]Location, error)
 	CreateLocation(networkID string, location *LocationCreate) (*Location, error)
+	CreateLocationsBulk(networkID string, locations []LocationBulkPatch) error
 	UpdateLocation(networkID string, locationID string, update *LocationUpdate) (*Location, error)
 	DeleteLocation(networkID string, locationID string) (*Location, error)
 }
@@ -388,28 +389,43 @@ type SnapshotsResponse struct {
 
 // Location types
 type Location struct {
-	ID          string                 `json:"id"`
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Latitude    *float64               `json:"latitude,omitempty"`
-	Longitude   *float64               `json:"longitude,omitempty"`
-	Properties  map[string]interface{} `json:"properties,omitempty"`
+	ID            string  `json:"id"`
+	Name          string  `json:"name"`
+	Lat           float64 `json:"lat"`
+	Lng           float64 `json:"lng"`
+	City          string  `json:"city,omitempty"`
+	AdminDivision string  `json:"adminDivision,omitempty"`
+	Country       string  `json:"country,omitempty"`
 }
 
 type LocationCreate struct {
-	Name        string                 `json:"name"`
-	Description string                 `json:"description,omitempty"`
-	Latitude    *float64               `json:"latitude,omitempty"`
-	Longitude   *float64               `json:"longitude,omitempty"`
-	Properties  map[string]interface{} `json:"properties,omitempty"`
+	ID            string  `json:"id,omitempty"`
+	Name          string  `json:"name"`
+	Lat           float64 `json:"lat"`
+	Lng           float64 `json:"lng"`
+	City          string  `json:"city,omitempty"`
+	AdminDivision string  `json:"adminDivision,omitempty"`
+	Country       string  `json:"country,omitempty"`
 }
 
 type LocationUpdate struct {
-	Name        *string                `json:"name,omitempty"`
-	Description *string                `json:"description,omitempty"`
-	Latitude    *float64               `json:"latitude,omitempty"`
-	Longitude   *float64               `json:"longitude,omitempty"`
-	Properties  map[string]interface{} `json:"properties,omitempty"`
+	ID            *string  `json:"id,omitempty"`
+	Name          *string  `json:"name,omitempty"`
+	Lat           *float64 `json:"lat,omitempty"`
+	Lng           *float64 `json:"lng,omitempty"`
+	City          *string  `json:"city,omitempty"`
+	AdminDivision *string  `json:"adminDivision,omitempty"`
+	Country       *string  `json:"country,omitempty"`
+}
+
+type LocationBulkPatch struct {
+	ID            string   `json:"id,omitempty"`
+	Name          string   `json:"name,omitempty"`
+	Lat           *float64 `json:"lat,omitempty"`
+	Lng           *float64 `json:"lng,omitempty"`
+	City          string   `json:"city,omitempty"`
+	AdminDivision string   `json:"adminDivision,omitempty"`
+	Country       string   `json:"country,omitempty"`
 }
 
 // Helper method to make authenticated requests
@@ -1542,6 +1558,25 @@ func (c *Client) CreateLocation(networkID string, location *LocationCreate) (*Lo
 	}
 
 	return &newLocation, nil
+}
+
+// CreateLocationsBulk creates or updates multiple locations using PATCH.
+// The API returns 204 No Content on success.
+func (c *Client) CreateLocationsBulk(networkID string, locations []LocationBulkPatch) error {
+	endpoint := fmt.Sprintf("/api/networks/%s/locations", networkID)
+
+	resp, err := c.makeRequest("PATCH", endpoint, locations)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+
+	// Expecting 204 No Content; treat any 2xx as success.
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("bulk patch locations failed: status=%d body=%s", resp.StatusCode, string(body))
+	}
+	return nil
 }
 
 func (c *Client) UpdateLocation(networkID string, locationID string, update *LocationUpdate) (*Location, error) {

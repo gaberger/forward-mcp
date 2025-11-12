@@ -2,8 +2,9 @@ package service
 
 // Network Management Tool Arguments
 type ListNetworksArgs struct {
-	// Dummy parameter for MCP framework compatibility (the tool doesn't actually use this)
-	RandomString string `json:"random_string" jsonschema:"description=Dummy parameter for no-parameter tools"`
+	Limit      int  `json:"limit,omitempty" jsonschema:"description=Maximum number of networks to return (default: 25, max: 100)"`
+	Offset     int  `json:"offset,omitempty" jsonschema:"description=Number of networks to skip (default: 0)"`
+	AllResults bool `json:"all_results,omitempty" jsonschema:"description=If true, fetch all networks using pagination and store in memory system"`
 }
 
 type CreateNetworkArgs struct {
@@ -69,12 +70,18 @@ type ListDevicesArgs struct {
 }
 
 type GetDeviceLocationsArgs struct {
-	NetworkID string `json:"network_id" jsonschema:"required,description=ID of the network"`
+	NetworkID  string `json:"network_id" jsonschema:"required,description=ID of the network"`
+	Limit      int    `json:"limit,omitempty" jsonschema:"description=Maximum number of device locations to return (default: 25, max: 100)"`
+	Offset     int    `json:"offset,omitempty" jsonschema:"description=Number of device locations to skip (default: 0)"`
+	AllResults bool   `json:"all_results,omitempty" jsonschema:"description=If true, fetch all device locations using pagination and store in memory system"`
 }
 
 // Snapshot Management Tool Arguments
 type ListSnapshotsArgs struct {
-	NetworkID string `json:"network_id" jsonschema:"required,description=ID of the network"`
+	NetworkID  string `json:"network_id" jsonschema:"required,description=ID of the network"`
+	Limit      int    `json:"limit,omitempty" jsonschema:"description=Maximum number of snapshots to return (default: 25, max: 100)"`
+	Offset     int    `json:"offset,omitempty" jsonschema:"description=Number of snapshots to skip (default: 0)"`
+	AllResults bool   `json:"all_results,omitempty" jsonschema:"description=If true, fetch all snapshots using pagination and store in memory system"`
 }
 
 type GetLatestSnapshotArgs struct {
@@ -87,24 +94,32 @@ type DeleteSnapshotArgs struct {
 
 // Location Management Tool Arguments
 type ListLocationsArgs struct {
-	NetworkID string `json:"network_id" jsonschema:"required,description=ID of the network"`
+	NetworkID  string `json:"network_id" jsonschema:"required,description=ID of the network"`
+	Limit      int    `json:"limit,omitempty" jsonschema:"description=Maximum number of locations to return (default: 25, max: 100)"`
+	Offset     int    `json:"offset,omitempty" jsonschema:"description=Number of locations to skip (default: 0)"`
+	AllResults bool   `json:"all_results,omitempty" jsonschema:"description=If true, fetch all locations using pagination and store in memory system"`
 }
 
 type CreateLocationArgs struct {
-	NetworkID   string   `json:"network_id" jsonschema:"required,description=ID of the network"`
-	Name        string   `json:"name" jsonschema:"required,description=Name of the location"`
-	Description string   `json:"description,omitempty" jsonschema:"description=Description of the location"`
-	Latitude    *float64 `json:"latitude,omitempty" jsonschema:"description=Latitude coordinate"`
-	Longitude   *float64 `json:"longitude,omitempty" jsonschema:"description=Longitude coordinate"`
+	NetworkID     string  `json:"network_id" jsonschema:"required,description=ID of the network"`
+	ID            string  `json:"id,omitempty" jsonschema:"description=Optional custom ID for the location (if not provided, a numeric ID will be assigned)"`
+	Name          string  `json:"name" jsonschema:"required,description=Name of the location"`
+	Lat           float64 `json:"lat" jsonschema:"required,description=Latitude coordinate (angle from -90 to +90 degrees)"`
+	Lng           float64 `json:"lng" jsonschema:"required,description=Longitude coordinate (angle from -180 to +180 degrees)"`
+	City          string  `json:"city,omitempty" jsonschema:"description=Name of the closest city"`
+	AdminDivision string  `json:"adminDivision,omitempty" jsonschema:"description=Administrative division (state, province, etc.)"`
+	Country       string  `json:"country,omitempty" jsonschema:"description=Country name"`
 }
 
 type UpdateLocationArgs struct {
-	NetworkID   string   `json:"network_id" jsonschema:"required,description=ID of the network"`
-	LocationID  string   `json:"location_id" jsonschema:"required,description=ID of the location to update"`
-	Name        string   `json:"name,omitempty" jsonschema:"description=New name for the location"`
-	Description string   `json:"description,omitempty" jsonschema:"description=New description for the location"`
-	Latitude    *float64 `json:"latitude,omitempty" jsonschema:"description=New latitude coordinate"`
-	Longitude   *float64 `json:"longitude,omitempty" jsonschema:"description=New longitude coordinate"`
+	NetworkID     string   `json:"network_id" jsonschema:"required,description=ID of the network"`
+	LocationID    string   `json:"location_id" jsonschema:"required,description=ID of the location to update"`
+	Name          string   `json:"name,omitempty" jsonschema:"description=New name for the location"`
+	Lat           *float64 `json:"lat,omitempty" jsonschema:"description=New latitude coordinate (angle from -90 to +90 degrees)"`
+	Lng           *float64 `json:"lng,omitempty" jsonschema:"description=New longitude coordinate (angle from -180 to +180 degrees)"`
+	City          string   `json:"city,omitempty" jsonschema:"description=Name of the closest city"`
+	AdminDivision string   `json:"adminDivision,omitempty" jsonschema:"description=Administrative division (state, province, etc.)"`
+	Country       string   `json:"country,omitempty" jsonschema:"description=Country name"`
 }
 
 type DeleteLocationArgs struct {
@@ -115,6 +130,22 @@ type DeleteLocationArgs struct {
 type UpdateDeviceLocationsArgs struct {
 	NetworkID string            `json:"network_id" jsonschema:"required,description=ID of the network"`
 	Locations map[string]string `json:"locations" jsonschema:"required,description=Map of device IDs to location IDs"`
+}
+
+// Bulk create/update locations using PATCH
+type CreateLocationsBulkArgs struct {
+	NetworkID string                   `json:"network_id" jsonschema:"required,description=ID of the network"`
+	Locations []CreateLocationItemArgs `json:"locations" jsonschema:"required,description=Array of locations to create or update"`
+}
+
+type CreateLocationItemArgs struct {
+	ID            string   `json:"id,omitempty" jsonschema:"description=ID of existing location to update (if not provided, creates new location)"`
+	Name          string   `json:"name,omitempty" jsonschema:"description=Name of the location (required if id not provided)"`
+	Lat           *float64 `json:"lat,omitempty" jsonschema:"description=Latitude (-90 to +90)"`
+	Lng           *float64 `json:"lng,omitempty" jsonschema:"description=Longitude (-180 to +180)"`
+	City          string   `json:"city,omitempty" jsonschema:"description=Name of the closest city"`
+	AdminDivision string   `json:"adminDivision,omitempty" jsonschema:"description=Administrative division (state, province, etc.)"`
+	Country       string   `json:"country,omitempty" jsonschema:"description=Country name"`
 }
 
 // First-Class Query Tool Arguments - Critical Network Operations
@@ -150,6 +181,7 @@ type SearchConfigsArgs struct {
 	DeviceFilter string                 `json:"device_filter,omitempty" jsonschema:"description=Optional device name pattern to filter results"`
 	Parameters   map[string]interface{} `json:"parameters,omitempty" jsonschema:"description=Additional query parameters"`
 	Options      *NQEQueryOptions       `json:"options,omitempty" jsonschema:"description=Query options (limit, offset, etc.)"`
+	AllResults   bool                   `json:"all_results,omitempty" jsonschema:"description=If true, fetch all config matches using pagination and store in memory system"`
 }
 
 // GetConfigDiffArgs represents arguments for configuration comparison
@@ -160,6 +192,7 @@ type GetConfigDiffArgs struct {
 	DeviceFilter   string                 `json:"device_filter,omitempty" jsonschema:"description=Optional device name pattern to filter results"`
 	Parameters     map[string]interface{} `json:"parameters,omitempty" jsonschema:"description=Additional query parameters"`
 	Options        *NQEQueryOptions       `json:"options,omitempty" jsonschema:"description=Query options (limit, offset, etc.)"`
+	AllResults     bool                   `json:"all_results,omitempty" jsonschema:"description=If true, fetch all config diff results using pagination and store in memory system"`
 }
 
 type GetDeviceUtilitiesArgs struct {
@@ -294,11 +327,17 @@ type GetEntityArgs struct {
 type GetRelationsArgs struct {
 	EntityID     string `json:"entity_id" jsonschema:"required,description=ID of the entity to get relations for"`
 	RelationType string `json:"relation_type" jsonschema:"description=Filter by relation type"`
+	Limit        int    `json:"limit,omitempty" jsonschema:"description=Maximum number of relations to return (default: 25, max: 100)"`
+	Offset       int    `json:"offset,omitempty" jsonschema:"description=Number of relations to skip (default: 0)"`
+	AllResults   bool   `json:"all_results,omitempty" jsonschema:"description=If true, fetch all relations using pagination and store in memory system"`
 }
 
 type GetObservationsArgs struct {
 	EntityID        string `json:"entity_id" jsonschema:"required,description=ID of the entity to get observations for"`
 	ObservationType string `json:"observation_type" jsonschema:"description=Filter by observation type"`
+	Limit           int    `json:"limit,omitempty" jsonschema:"description=Maximum number of observations to return (default: 25, max: 100)"`
+	Offset          int    `json:"offset,omitempty" jsonschema:"description=Number of observations to skip (default: 0)"`
+	AllResults      bool   `json:"all_results,omitempty" jsonschema:"description=If true, fetch all observations using pagination and store in memory system"`
 }
 
 type DeleteEntityArgs struct {
@@ -321,6 +360,12 @@ type GetMemoryStatsArgs struct {
 // API Analytics Tools Arguments
 type GetQueryAnalyticsArgs struct {
 	NetworkID string `json:"network_id" jsonschema:"required,description=Network ID to get analytics for"`
+}
+
+// Instance Management Tool Arguments
+type ListInstanceIDsArgs struct {
+	// Dummy parameter for MCP framework compatibility
+	Dummy string `json:"dummy,omitempty" jsonschema:"description=Dummy parameter for no-parameter tools"`
 }
 
 // For the config search tool schema/registration:

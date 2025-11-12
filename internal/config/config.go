@@ -33,6 +33,9 @@ type ForwardConfig struct {
 	DefaultSnapshotID string `json:"defaultSnapshotId" env:"FORWARD_DEFAULT_SNAPSHOT_ID"`
 	DefaultQueryLimit int    `json:"defaultQueryLimit" env:"FORWARD_DEFAULT_QUERY_LIMIT"`
 
+	// Instance Configuration
+	InstanceID string `json:"instanceId" env:"FORWARD_INSTANCE_ID"`
+
 	// TLS Configuration
 	InsecureSkipVerify bool   `json:"insecureSkipVerify" env:"FORWARD_INSECURE_SKIP_VERIFY"`
 	CACertPath         string `json:"caCertPath" env:"FORWARD_CA_CERT_PATH"`

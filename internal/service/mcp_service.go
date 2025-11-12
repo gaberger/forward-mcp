@@ -102,9 +102,14 @@ type ServiceDefaults struct {
 
 // NewForwardMCPService creates a new Forward MCP service
 func NewForwardMCPService(cfg *config.Config, logger *logger.Logger) *ForwardMCPService {
-	// Generate instance ID for partitioning database and cache by Forward Networks instance
-	instanceID := GenerateInstanceID(cfg.Forward.APIBaseURL)
-	logger.Info("Using instance ID '%s' for partitioning (based on %s)", instanceID, cfg.Forward.APIBaseURL)
+	// Use configured instance ID or generate one based on API URL
+	instanceID := cfg.Forward.InstanceID
+	if instanceID == "" {
+		instanceID = GenerateInstanceID(cfg.Forward.APIBaseURL)
+		logger.Info("Using generated instance ID '%s' for partitioning (based on %s)", instanceID, cfg.Forward.APIBaseURL)
+	} else {
+		logger.Info("Using configured instance ID '%s' for partitioning", instanceID)
+	}
 
 	// Create Forward Networks client
 	forwardClient := forward.NewClient(&cfg.Forward)
@@ -367,7 +372,7 @@ func (s *ForwardMCPService) timeAndLogTool(toolName string, args interface{}, fn
 func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 	// Network Management Tools
 	if err := server.RegisterTool("list_networks",
-		"List all networks in the Forward platform. Returns network IDs, names, and descriptions. Use this to discover available networks or find network IDs for other operations.",
+		"List all networks in the Forward platform. Returns network IDs, names, and descriptions. Use this to discover available networks or find network IDs for other operations. Supports pagination (limit/offset) and memory storage for large datasets.",
 		s.listNetworks); err != nil {
 		return fmt.Errorf("failed to register list_networks tool: %w", err)
 	}
@@ -475,7 +480,7 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 
 	// Snapshot Management Tools
 	if err := server.RegisterTool("list_snapshots",
-		"List network configuration snapshots. Requires network_id. Shows historical network states with timestamps and status. Use to view configuration history and find specific snapshots for queries.",
+		"List network configuration snapshots. Requires network_id. Shows historical network states with timestamps and status. Use to view configuration history and find specific snapshots for queries. Supports pagination (limit/offset) and memory storage for large datasets.",
 		s.listSnapshots); err != nil {
 		return fmt.Errorf("failed to register list_snapshots tool: %w", err)
 	}
@@ -494,13 +499,13 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 
 	// Location Management Tools
 	if err := server.RegisterTool("list_locations",
-		"List locations in a network. Requires network_id. Returns physical locations with names and coordinates. Use to view network topology and organize devices by location.",
+		"List locations in a network. Requires network_id. Returns physical locations with names and coordinates. Use to view network topology and organize devices by location. Supports pagination (limit/offset) and memory storage for large datasets. Default limit is 25 to prevent token overflow.",
 		s.listLocations); err != nil {
 		return fmt.Errorf("failed to register list_locations tool: %w", err)
 	}
 
 	if err := server.RegisterTool("create_location",
-		"Create a new location in a network. Requires network_id and location name. Optional description and coordinates. Use to set up new sites or data centers for device organization.",
+		"Create a new location in a network. Requires network_id, location name, latitude, and longitude. Optional city, adminDivision, and country. Use to set up new sites or data centers for device organization.",
 		s.createLocation); err != nil {
 		return fmt.Errorf("failed to register create_location tool: %w", err)
 	}
@@ -517,8 +522,14 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 		return fmt.Errorf("failed to register delete_location tool: %w", err)
 	}
 
+	if err := server.RegisterTool("create_locations_bulk",
+		"Create or update multiple network locations in a single operation. Requires network_id and an array of locations. Uses PATCH /api/networks/{networkId}/locations. Locations with existing IDs will be updated, others will be created.",
+		s.createLocationsBulk); err != nil {
+		return fmt.Errorf("failed to register create_locations_bulk tool: %w", err)
+	}
+
 	if err := server.RegisterTool("update_device_locations",
-		"Update device location assignments in bulk. Requires network_id and a map of device IDs to location IDs. Use to assign multiple devices to their physical locations efficiently.",
+		"Update device location assignments in bulk. Requires network_id and a map of device IDs to location IDs. Use to assign multiple devices to their physical locations efficiently. Note: Cloud devices (CSR1KV, PAN-FW, etc.) cannot be moved to physical locations.",
 		s.updateDeviceLocations); err != nil {
 		return fmt.Errorf("failed to register update_device_locations tool: %w", err)
 	}
@@ -560,6 +571,28 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 		"🧠 **AI-POWERED SEARCH**: Find relevant NQE queries using natural language.\n\nAI-powered search through 6000+ predefined NQE queries using natural language. Describe what you want to analyze and get relevant query suggestions.\n\n**Best Practices:**\n- Be specific and descriptive in your query\n- Use examples like 'AWS security issues', 'BGP routing problems'\n- Avoid vague terms like 'network' or 'config'\n- Use category filters to narrow results\n\n**Example Queries:**\n- 'show me AWS security vulnerabilities'\n- 'find BGP routing issues'\n- 'check interface utilization'\n- 'devices with high CPU usage'\n\n**Note:** For executable queries, use find_executable_query instead.",
 		s.searchNQEQueries); err != nil {
 		return fmt.Errorf("failed to register search_nqe_queries tool: %w", err)
+	}
+
+	// Bulk location setup workflow (guides bulk upsert using PATCH)
+	if err := server.RegisterPrompt("bulk_location_setup", "Guide to bulk create or update network locations", func(args struct {
+		SessionID string `json:"session_id,omitempty"`
+	}) (*mcp.PromptResponse, error) {
+		content := "" +
+			"You can create or update multiple locations in bulk using PATCH.\n\n" +
+			"- Use create_locations_bulk for both creating new locations and updating existing ones.\n" +
+			"- Locations with existing IDs will be updated, others will be created.\n" +
+			"- Either 'id' (for updates) or 'name' (for creates) must be provided for each location.\n\n" +
+			"Example request for create_locations_bulk:\n" +
+			"{" +
+			"\"network_id\": \"12345\",\n" +
+			"\"locations\": [\n" +
+			"  { \"id\": \"dyt-a\", \"name\": \"Dayton DC Updated\", \"lat\": 39.8113, \"lng\": -84.2722 },\n" +
+			"  { \"name\": \"NY Edge\", \"lat\": 40.7128, \"lng\": -74.0060, \"city\": \"New York\" }\n" +
+			"]}\n\n" +
+			"Tip: This is safe to run multiple times - existing locations will be updated, new ones created."
+		return mcp.NewPromptResponse("Bulk Location Setup", mcp.NewPromptMessage(mcp.NewTextContent(content), mcp.RoleAssistant)), nil
+	}); err != nil {
+		return fmt.Errorf("failed to register bulk_location_setup prompt: %w", err)
 	}
 
 	if err := server.RegisterTool("initialize_query_index",
@@ -659,6 +692,13 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 		"Get analytics about query patterns and performance for a specific network. Shows query counts, execution times, result patterns, and usage trends from the memory system.",
 		s.getQueryAnalytics); err != nil {
 		return fmt.Errorf("failed to register get_query_analytics tool: %w", err)
+	}
+
+	// Instance Management Tools
+	if err := server.RegisterTool("list_instance_ids",
+		"List all available Forward Networks instance IDs in the database. Shows instance IDs with query counts and sync dates. Use this to find the correct instance ID to configure in FORWARD_INSTANCE_ID environment variable.",
+		s.listInstanceIDs); err != nil {
+		return fmt.Errorf("failed to register list_instance_ids tool: %w", err)
 	}
 
 	// Tool handler for get_nqe_result_chunks
@@ -1142,13 +1182,93 @@ func (s *ForwardMCPService) executeSelectedQuery(sessionID string) (*mcp.ToolRes
 func (s *ForwardMCPService) listNetworks(args ListNetworksArgs) (*mcp.ToolResponse, error) {
 	s.logToolCall("list_networks", args, nil)
 
-	networks, err := s.forwardClient.GetNetworks()
+	// Get all networks from API
+	allNetworks, err := s.forwardClient.GetNetworks()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list networks: %w", err)
 	}
 
-	result := MarshalCompactJSONString(networks)
-	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Found %d networks:\n%s", len(networks), result))), nil
+	// Apply pagination with safe defaults to prevent token overflow
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 25 // Conservative default limit to prevent token overflow
+	}
+	if limit > 100 {
+		limit = 100 // Cap at 100 to prevent excessive responses
+	}
+	offset := args.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var networks []forward.Network
+	var totalCount int
+	var hasMore bool
+
+	if args.AllResults {
+		// Store all networks in memory system for large datasets
+		networks = allNetworks
+		totalCount = len(allNetworks)
+		hasMore = false
+
+		// Store in memory system if available
+		if s.memorySystem != nil {
+			entity, err := s.memorySystem.CreateEntity("network_list", "query_result", map[string]interface{}{
+				"query_type":  "list_networks",
+				"total_count": totalCount,
+				"timestamp":   time.Now().Unix(),
+			})
+			if err == nil {
+				// Store the networks data
+				networksJSON, _ := json.Marshal(networks)
+				s.memorySystem.AddObservation(entity.ID, string(networksJSON), "data", map[string]interface{}{
+					"data_type": "networks_list",
+					"count":     totalCount,
+				})
+			}
+		}
+	} else {
+		// Apply pagination
+		totalCount = len(allNetworks)
+		start := offset
+		end := offset + limit
+		if start >= totalCount {
+			networks = []forward.Network{}
+		} else {
+			if end > totalCount {
+				end = totalCount
+			}
+			networks = allNetworks[start:end]
+		}
+		hasMore = offset+len(networks) < totalCount
+	}
+
+	// Build response
+	var responseText strings.Builder
+	responseText.WriteString(fmt.Sprintf("Found %d networks", totalCount))
+	if !args.AllResults {
+		responseText.WriteString(fmt.Sprintf(" (showing %d-%d)", offset+1, offset+len(networks)))
+		if hasMore {
+			responseText.WriteString(fmt.Sprintf(", %d more available", totalCount-offset-len(networks)))
+		}
+		if args.Limit <= 0 {
+			responseText.WriteString(" [Note: Using default limit of 25 to prevent token overflow. Use 'limit' parameter to adjust.]")
+		}
+	}
+	responseText.WriteString(":\n")
+
+	if len(networks) > 0 {
+		result := MarshalCompactJSONString(networks)
+		responseText.WriteString(result)
+	} else {
+		responseText.WriteString("No networks found.")
+	}
+
+	if args.AllResults && s.memorySystem != nil {
+		responseText.WriteString(fmt.Sprintf("\n\n💾 Stored %d networks in memory system for future reference.", totalCount))
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(responseText.String())), nil
 }
 
 func (s *ForwardMCPService) createNetwork(args CreateNetworkArgs) (*mcp.ToolResponse, error) {
@@ -1813,25 +1933,194 @@ func (s *ForwardMCPService) listDevices(args ListDevicesArgs) (*mcp.ToolResponse
 
 func (s *ForwardMCPService) getDeviceLocations(args GetDeviceLocationsArgs) (*mcp.ToolResponse, error) {
 	s.logToolCall("get_device_locations", args, nil)
-	locations, err := s.forwardClient.GetDeviceLocations(args.NetworkID)
+
+	// Get all device locations from API
+	allLocations, err := s.forwardClient.GetDeviceLocations(args.NetworkID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get device locations: %w", err)
 	}
 
-	result, _ := json.MarshalIndent(locations, "", "  ")
-	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Device locations:\n%s", string(result)))), nil
+	// Apply pagination with safe defaults to prevent token overflow
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 25 // Conservative default limit to prevent token overflow
+	}
+	if limit > 100 {
+		limit = 100 // Cap at 100 to prevent excessive responses
+	}
+	offset := args.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var locations map[string]string
+	var totalCount int
+	var hasMore bool
+
+	if args.AllResults {
+		// Store all device locations in memory system for large datasets
+		locations = allLocations
+		totalCount = len(allLocations)
+		hasMore = false
+
+		// Store in memory system if available
+		if s.memorySystem != nil {
+			entity, err := s.memorySystem.CreateEntity("device_locations", "query_result", map[string]interface{}{
+				"query_type":  "get_device_locations",
+				"network_id":  args.NetworkID,
+				"total_count": totalCount,
+				"timestamp":   time.Now().Unix(),
+			})
+			if err == nil {
+				// Store the device locations data
+				locationsJSON, _ := json.Marshal(locations)
+				s.memorySystem.AddObservation(entity.ID, string(locationsJSON), "data", map[string]interface{}{
+					"data_type": "device_locations",
+					"count":     totalCount,
+				})
+			}
+		}
+	} else {
+		// Apply pagination to map
+		totalCount = len(allLocations)
+		start := offset
+		end := offset + limit
+		if start >= totalCount {
+			locations = make(map[string]string)
+		} else {
+			locations = make(map[string]string)
+			keys := make([]string, 0, len(allLocations))
+			for k := range allLocations {
+				keys = append(keys, k)
+			}
+			if end > totalCount {
+				end = totalCount
+			}
+			for i := start; i < end; i++ {
+				key := keys[i]
+				locations[key] = allLocations[key]
+			}
+		}
+		hasMore = offset+len(locations) < totalCount
+	}
+
+	// Build response
+	var responseText strings.Builder
+	responseText.WriteString(fmt.Sprintf("Found %d device locations", totalCount))
+	if !args.AllResults {
+		responseText.WriteString(fmt.Sprintf(" (showing %d-%d)", offset+1, offset+len(locations)))
+		if hasMore {
+			responseText.WriteString(fmt.Sprintf(", %d more available", totalCount-offset-len(locations)))
+		}
+	}
+	responseText.WriteString(":\n")
+
+	if len(locations) > 0 {
+		result, _ := json.MarshalIndent(locations, "", "  ")
+		responseText.WriteString(string(result))
+	} else {
+		responseText.WriteString("No device locations found.")
+	}
+
+	if args.AllResults && s.memorySystem != nil {
+		responseText.WriteString(fmt.Sprintf("\n\n💾 Stored %d device locations in memory system for future reference.", totalCount))
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(responseText.String())), nil
 }
 
 // Snapshot Management Tool Implementations
 func (s *ForwardMCPService) listSnapshots(args ListSnapshotsArgs) (*mcp.ToolResponse, error) {
 	s.logToolCall("list_snapshots", args, nil)
-	snapshots, err := s.forwardClient.GetSnapshots(args.NetworkID)
+
+	// Get all snapshots from API
+	allSnapshots, err := s.forwardClient.GetSnapshots(args.NetworkID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list snapshots: %w", err)
 	}
 
-	result, _ := json.MarshalIndent(snapshots, "", "  ")
-	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Found %d snapshots:\n%s", len(snapshots), string(result)))), nil
+	// Apply pagination with safe defaults to prevent token overflow
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 25 // Conservative default limit to prevent token overflow
+	}
+	if limit > 100 {
+		limit = 100 // Cap at 100 to prevent excessive responses
+	}
+	offset := args.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var snapshots []forward.Snapshot
+	var totalCount int
+	var hasMore bool
+
+	if args.AllResults {
+		// Store all snapshots in memory system for large datasets
+		snapshots = allSnapshots
+		totalCount = len(allSnapshots)
+		hasMore = false
+
+		// Store in memory system if available
+		if s.memorySystem != nil {
+			entity, err := s.memorySystem.CreateEntity("snapshot_list", "query_result", map[string]interface{}{
+				"query_type":  "list_snapshots",
+				"network_id":  args.NetworkID,
+				"total_count": totalCount,
+				"timestamp":   time.Now().Unix(),
+			})
+			if err == nil {
+				// Store the snapshots data
+				snapshotsJSON, _ := json.Marshal(snapshots)
+				s.memorySystem.AddObservation(entity.ID, string(snapshotsJSON), "data", map[string]interface{}{
+					"data_type": "snapshots_list",
+					"count":     totalCount,
+				})
+			}
+		}
+	} else {
+		// Apply pagination
+		totalCount = len(allSnapshots)
+		start := offset
+		end := offset + limit
+		if start >= totalCount {
+			snapshots = []forward.Snapshot{}
+		} else {
+			if end > totalCount {
+				end = totalCount
+			}
+			snapshots = allSnapshots[start:end]
+		}
+		hasMore = offset+len(snapshots) < totalCount
+	}
+
+	// Build response
+	var responseText strings.Builder
+	responseText.WriteString(fmt.Sprintf("Found %d snapshots", totalCount))
+	if !args.AllResults {
+		responseText.WriteString(fmt.Sprintf(" (showing %d-%d)", offset+1, offset+len(snapshots)))
+		if hasMore {
+			responseText.WriteString(fmt.Sprintf(", %d more available", totalCount-offset-len(snapshots)))
+		}
+		if args.Limit <= 0 {
+			responseText.WriteString(" [Note: Using default limit of 25 to prevent token overflow. Use 'limit' parameter to adjust.]")
+		}
+	}
+	responseText.WriteString(":\n")
+
+	if len(snapshots) > 0 {
+		result, _ := json.MarshalIndent(snapshots, "", "  ")
+		responseText.WriteString(string(result))
+	} else {
+		responseText.WriteString("No snapshots found.")
+	}
+
+	if args.AllResults && s.memorySystem != nil {
+		responseText.WriteString(fmt.Sprintf("\n\n💾 Stored %d snapshots in memory system for future reference.", totalCount))
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(responseText.String())), nil
 }
 
 func (s *ForwardMCPService) getLatestSnapshot(args GetLatestSnapshotArgs) (*mcp.ToolResponse, error) {
@@ -1848,26 +2137,136 @@ func (s *ForwardMCPService) getLatestSnapshot(args GetLatestSnapshotArgs) (*mcp.
 // Location Management Tool Implementations
 func (s *ForwardMCPService) listLocations(args ListLocationsArgs) (*mcp.ToolResponse, error) {
 	s.logToolCall("list_locations", args, nil)
-	locations, err := s.forwardClient.GetLocations(args.NetworkID)
+
+	// Get all locations from API
+	allLocations, err := s.forwardClient.GetLocations(args.NetworkID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list locations: %w", err)
 	}
 
-	result, _ := json.MarshalIndent(locations, "", "  ")
-	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Found %d locations:\n%s", len(locations), string(result)))), nil
+	// Apply pagination with safe defaults to prevent token overflow
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 25 // Conservative default limit to prevent token overflow
+	}
+	if limit > 100 {
+		limit = 100 // Cap at 100 to prevent excessive responses
+	}
+	offset := args.Offset
+	if offset < 0 {
+		offset = 0
+	}
+
+	var locations []forward.Location
+	var totalCount int
+	var hasMore bool
+
+	if args.AllResults {
+		// Store all locations in memory system for large datasets
+		locations = allLocations
+		totalCount = len(allLocations)
+		hasMore = false
+
+		// Store in memory system if available
+		if s.memorySystem != nil {
+			entity, err := s.memorySystem.CreateEntity("location_list", "query_result", map[string]interface{}{
+				"query_type":  "list_locations",
+				"network_id":  args.NetworkID,
+				"total_count": totalCount,
+				"timestamp":   time.Now().Unix(),
+			})
+			if err == nil {
+				// Store the locations data
+				locationsJSON, _ := json.Marshal(locations)
+				s.memorySystem.AddObservation(entity.ID, string(locationsJSON), "data", map[string]interface{}{
+					"data_type": "locations_list",
+					"count":     totalCount,
+				})
+			}
+		}
+	} else {
+		// Apply pagination
+		totalCount = len(allLocations)
+		start := offset
+		end := offset + limit
+		if start >= totalCount {
+			locations = []forward.Location{}
+		} else {
+			if end > totalCount {
+				end = totalCount
+			}
+			locations = allLocations[start:end]
+		}
+		hasMore = offset+len(locations) < totalCount
+	}
+
+	// Build response
+	var responseText strings.Builder
+	responseText.WriteString(fmt.Sprintf("Found %d locations", totalCount))
+	if !args.AllResults {
+		responseText.WriteString(fmt.Sprintf(" (showing %d-%d)", offset+1, offset+len(locations)))
+		if hasMore {
+			responseText.WriteString(fmt.Sprintf(", %d more available", totalCount-offset-len(locations)))
+		}
+		if args.Limit <= 0 {
+			responseText.WriteString(" [Note: Using default limit of 25 to prevent token overflow. Use 'limit' parameter to adjust.]")
+		}
+	}
+	responseText.WriteString(":\n")
+
+	if len(locations) > 0 {
+		result, _ := json.MarshalIndent(locations, "", "  ")
+		responseText.WriteString(string(result))
+	} else {
+		responseText.WriteString("No locations found.")
+	}
+
+	if args.AllResults && s.memorySystem != nil {
+		responseText.WriteString(fmt.Sprintf("\n\n💾 Stored %d locations in memory system for future reference.", totalCount))
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(responseText.String())), nil
 }
 
 func (s *ForwardMCPService) createLocation(args CreateLocationArgs) (*mcp.ToolResponse, error) {
 	s.logToolCall("create_location", args, nil)
-	location := &forward.LocationCreate{
-		Name:        args.Name,
-		Description: args.Description,
-		Latitude:    args.Latitude,
-		Longitude:   args.Longitude,
+
+	// Log the received parameters for debugging
+	s.logger.Info("Creating location with parameters: network_id=%s, name=%s, lat=%f, lng=%f, city=%s, adminDivision=%s, country=%s",
+		args.NetworkID, args.Name, args.Lat, args.Lng, args.City, args.AdminDivision, args.Country)
+
+	// Check if lat/lng are zero values (which might indicate they weren't provided)
+	if args.Lat == 0 && args.Lng == 0 {
+		s.logger.Warn("Latitude and longitude are both zero - this might indicate missing parameters")
 	}
+
+	// Validate latitude is within valid range (-90 to +90)
+	if args.Lat < -90 || args.Lat > 90 {
+		return nil, fmt.Errorf("latitude must be between -90 and +90 degrees, got: %f", args.Lat)
+	}
+
+	// Validate longitude is within valid range (-180 to +180)
+	if args.Lng < -180 || args.Lng > 180 {
+		return nil, fmt.Errorf("longitude must be between -180 and +180 degrees, got: %f", args.Lng)
+	}
+
+	location := &forward.LocationCreate{
+		ID:            args.ID,
+		Name:          args.Name,
+		Lat:           args.Lat,
+		Lng:           args.Lng,
+		City:          args.City,
+		AdminDivision: args.AdminDivision,
+		Country:       args.Country,
+	}
+
+	// Log the location object being sent to the API
+	locationJSON, _ := json.Marshal(location)
+	s.logger.Info("Sending location to API: %s", string(locationJSON))
 
 	newLocation, err := s.forwardClient.CreateLocation(args.NetworkID, location)
 	if err != nil {
+		s.logger.Error("Failed to create location: error=%v, network_id=%s", err, args.NetworkID)
 		return nil, fmt.Errorf("failed to create location: %w", err)
 	}
 
@@ -1875,13 +2274,60 @@ func (s *ForwardMCPService) createLocation(args CreateLocationArgs) (*mcp.ToolRe
 	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Location created successfully:\n%s", string(result)))), nil
 }
 
+func (s *ForwardMCPService) createLocationsBulk(args CreateLocationsBulkArgs) (*mcp.ToolResponse, error) {
+	s.logToolCall("create_locations_bulk", args, nil)
+
+	if len(args.Locations) == 0 {
+		return nil, fmt.Errorf("at least one location must be provided")
+	}
+
+	// Validate inputs and transform to forward.LocationBulkPatch slice as required by PATCH
+	locations := make([]forward.LocationBulkPatch, 0, len(args.Locations))
+	for i, item := range args.Locations {
+		// For PATCH: either ID or Name must be provided
+		if item.ID == "" && item.Name == "" {
+			return nil, fmt.Errorf("location[%d] must have either id (for update) or name (for create)", i)
+		}
+
+		// Validate coordinates if provided
+		if item.Lat != nil && (*item.Lat < -90 || *item.Lat > 90) {
+			return nil, fmt.Errorf("location[%d] latitude must be between -90 and +90 degrees, got: %f", i, *item.Lat)
+		}
+		if item.Lng != nil && (*item.Lng < -180 || *item.Lng > 180) {
+			return nil, fmt.Errorf("location[%d] longitude must be between -180 and +180 degrees, got: %f", i, *item.Lng)
+		}
+
+		// Build forward.LocationBulkPatch (PATCH expects partial objects)
+		loc := forward.LocationBulkPatch{
+			ID:            item.ID,
+			Name:          item.Name,
+			Lat:           item.Lat,
+			Lng:           item.Lng,
+			City:          item.City,
+			AdminDivision: item.AdminDivision,
+			Country:       item.Country,
+		}
+		locations = append(locations, loc)
+	}
+
+	// Execute bulk patch (create/update)
+	err := s.forwardClient.CreateLocationsBulk(args.NetworkID, locations)
+	if err != nil {
+		return nil, fmt.Errorf("failed to patch locations in bulk: %w", err)
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent("Bulk locations patched successfully (204 No Content).")), nil
+}
+
 func (s *ForwardMCPService) updateLocation(args UpdateLocationArgs) (*mcp.ToolResponse, error) {
 	s.logToolCall("update_location", args, nil)
 	update := &forward.LocationUpdate{
-		Name:        &args.Name,
-		Description: &args.Description,
-		Latitude:    args.Latitude,
-		Longitude:   args.Longitude,
+		Name:          &args.Name,
+		Lat:           args.Lat,
+		Lng:           args.Lng,
+		City:          &args.City,
+		AdminDivision: &args.AdminDivision,
+		Country:       &args.Country,
 	}
 
 	updatedLocation, err := s.forwardClient.UpdateLocation(args.NetworkID, args.LocationID, update)
@@ -1914,14 +2360,163 @@ func (s *ForwardMCPService) deleteSnapshot(args DeleteSnapshotArgs) (*mcp.ToolRe
 	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Snapshot %s deleted successfully", args.SnapshotID))), nil
 }
 
+// isCloudDevice checks if a device name suggests it's a cloud device
+func (s *ForwardMCPService) isCloudDevice(deviceName string) bool {
+	deviceNameLower := strings.ToLower(deviceName)
+
+	// Debug logging for troubleshooting
+	// fmt.Printf("DEBUG: Checking device '%s' (lowercase: '%s')\n", deviceName, deviceNameLower)
+
+	// Explicit cloud device patterns (exact matches or specific patterns)
+	exactCloudPatterns := []string{
+		"csr1kv", "csr-1kv", "csr_1kv",
+		"pan-fw", "pan_fw", "panfw",
+		"aws-", "azure-", "gcp-",
+		"virtual-", "vm-", "container-",
+	}
+
+	// Check for exact cloud device patterns
+	for _, pattern := range exactCloudPatterns {
+		if strings.Contains(deviceNameLower, pattern) {
+			return true
+		}
+	}
+
+	// Check for cloud-specific naming patterns (more restrictive)
+	cloudPatterns := []string{
+		"aws-", "azure-", "gcp-", "cloud-", // Cloud provider prefixes
+		"virtual-", "vm-", "container-", // Virtualization prefixes
+		"-aws", "-azure", "-gcp", // Cloud provider suffixes (but not -cloud)
+		"-virtual", "-vm", "-container", // Virtualization suffixes
+	}
+
+	for _, pattern := range cloudPatterns {
+		if strings.Contains(deviceNameLower, pattern) {
+			return true
+		}
+	}
+
+	// Check for standalone cloud keywords (but not as part of infrastructure names)
+	// This is more restrictive - only match if the keyword appears in a cloud context
+	// Note: "cloud" and "kvm" are handled separately below
+	standaloneCloudKeywords := []string{
+		"aws", "azure", "gcp", "virtual", "vm", "container",
+	}
+
+	for _, keyword := range standaloneCloudKeywords {
+		// Only match if the keyword appears as a standalone word or with cloud-specific prefixes
+		if strings.Contains(deviceNameLower, keyword) {
+			// Check if it's part of a cloud-specific pattern
+			if strings.HasPrefix(deviceNameLower, keyword+"-") ||
+				strings.HasSuffix(deviceNameLower, "-"+keyword) ||
+				strings.Contains(deviceNameLower, "-"+keyword+"-") {
+				return true
+			}
+		}
+	}
+
+	// Special case: "cloud" keyword - only match if it's clearly a cloud device
+	// Don't match infrastructure devices that happen to contain "cloud" in their name
+	if strings.Contains(deviceNameLower, "cloud") {
+		// Only match if it's a clear cloud device pattern
+		cloudSpecificPatterns := []string{
+			"cloud-", "-cloud-", // Cloud prefixes and middle patterns
+			"aws-cloud", "azure-cloud", "gcp-cloud",
+			"cloud-aws", "cloud-azure", "cloud-gcp",
+		}
+
+		for _, pattern := range cloudSpecificPatterns {
+			if strings.Contains(deviceNameLower, pattern) {
+				return true
+			}
+		}
+
+		// Don't match infrastructure devices like "fel-wps1-cloud2s02" or "fel-wps1-cloudm3s01"
+		// These are physical devices with "cloud" in their infrastructure role name
+		return false
+	}
+
+	// Special case: "kvm" keyword - only match if it's clearly a virtual device
+	// Don't match physical KVM devices like "fel-wps1-kvmd2s01"
+	if strings.Contains(deviceNameLower, "kvm") {
+		// Only match if it's a clear virtual device pattern
+		kvmVirtualPatterns := []string{
+			"kvm-", "-kvm-", // KVM prefixes and middle patterns
+			"virtual-kvm", "vm-kvm", "container-kvm",
+			"kvm-virtual", "kvm-vm", "kvm-container",
+		}
+
+		for _, pattern := range kvmVirtualPatterns {
+			if strings.Contains(deviceNameLower, pattern) {
+				return true
+			}
+		}
+
+		// Don't match physical KVM devices like "fel-wps1-kvmd2s01"
+		// These are physical devices with "kvm" in their infrastructure role name
+		// Only match if it's clearly a virtual device (not just ending with -kvm)
+		return false
+	}
+
+	return false
+}
+
 func (s *ForwardMCPService) updateDeviceLocations(args UpdateDeviceLocationsArgs) (*mcp.ToolResponse, error) {
 	s.logToolCall("update_device_locations", args, nil)
+
+	// Log the devices being moved for debugging
+	s.logger.Info("Updating device locations for %d devices: %v", len(args.Locations), args.Locations)
+
+	// Pre-validate for cloud devices
+	var cloudDevices []string
+	var physicalDevices = make(map[string]string)
+
+	for deviceName, locationID := range args.Locations {
+		if s.isCloudDevice(deviceName) {
+			cloudDevices = append(cloudDevices, deviceName)
+			s.logger.Warn("Detected cloud device in location update: %s", deviceName)
+		} else {
+			physicalDevices[deviceName] = locationID
+		}
+	}
+
+	// If we found cloud devices, provide a helpful warning
+	if len(cloudDevices) > 0 {
+		s.logger.Warn("Cloud devices detected: %v. These will be excluded from the location update.", cloudDevices)
+
+		// If all devices are cloud devices, return an error
+		if len(physicalDevices) == 0 {
+			return nil, fmt.Errorf("all devices are cloud devices and cannot be moved to physical locations: %v\n\nNote: Cloud devices (CSR1KV, PAN-FW, etc.) cannot be moved to physical locations. Please use only physical devices for location assignments.", cloudDevices)
+		}
+
+		// Update only physical devices
+		args.Locations = physicalDevices
+		s.logger.Info("Proceeding with %d physical devices, excluding %d cloud devices", len(physicalDevices), len(cloudDevices))
+	}
+
 	err := s.forwardClient.UpdateDeviceLocations(args.NetworkID, args.Locations)
 	if err != nil {
+		// Check if this is a cloud device error
+		if strings.Contains(err.Error(), "Unrecognized devices cannot be moved") {
+			// Extract device names from the error message
+			errorMsg := err.Error()
+			s.logger.Warn("Cloud devices detected in location update request: %s", errorMsg)
+
+			// Provide a more helpful error message
+			return nil, fmt.Errorf("failed to update device locations: %w\n\nNote: Cloud devices (like CSR1KV, PAN-FW, etc.) cannot be moved to physical locations. Please exclude cloud devices from the location assignment.", err)
+		}
+
+		s.logger.Error("Failed to update device locations: error=%v, network_id=%s", err, args.NetworkID)
 		return nil, fmt.Errorf("failed to update device locations: %w", err)
 	}
 
-	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Updated locations for %d devices", len(args.Locations)))), nil
+	// Build success message
+	successMsg := fmt.Sprintf("Updated locations for %d devices", len(args.Locations))
+	if len(cloudDevices) > 0 {
+		successMsg += fmt.Sprintf("\nNote: %d cloud devices were excluded: %v", len(cloudDevices), cloudDevices)
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(successMsg)), nil
 }
 
 // resolveNetworkIDByName resolves a network name to its networkId using a case-insensitive match.
@@ -2780,21 +3375,95 @@ func (s *ForwardMCPService) getRelations(args GetRelationsArgs) (*mcp.ToolRespon
 		return nil, fmt.Errorf("memory system is not available")
 	}
 
-	relations, err := s.memorySystem.GetRelations(args.EntityID, args.RelationType)
+	// Get all relations from memory system
+	allRelations, err := s.memorySystem.GetRelations(args.EntityID, args.RelationType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get relations: %w", err)
 	}
 
-	if len(relations) == 0 {
-		return mcp.NewToolResponse(mcp.NewTextContent("No relations found for this entity.")), nil
+	// Apply pagination with safe defaults to prevent token overflow
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 25 // Conservative default limit to prevent token overflow
+	}
+	if limit > 100 {
+		limit = 100 // Cap at 100 to prevent excessive responses
+	}
+	offset := args.Offset
+	if offset < 0 {
+		offset = 0
 	}
 
-	relationsJSON, err := json.MarshalIndent(relations, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal relations: %w", err)
+	var relations []*Relation
+	var totalCount int
+	var hasMore bool
+
+	if args.AllResults {
+		// Store all relations in memory system for large datasets
+		relations = allRelations
+		totalCount = len(allRelations)
+		hasMore = false
+
+		// Store in memory system if available
+		entity, err := s.memorySystem.CreateEntity("relations_list", "query_result", map[string]interface{}{
+			"query_type":    "get_relations",
+			"entity_id":     args.EntityID,
+			"relation_type": args.RelationType,
+			"total_count":   totalCount,
+			"timestamp":     time.Now().Unix(),
+		})
+		if err == nil {
+			// Store the relations data
+			relationsJSON, _ := json.Marshal(relations)
+			s.memorySystem.AddObservation(entity.ID, string(relationsJSON), "data", map[string]interface{}{
+				"data_type": "relations_list",
+				"count":     totalCount,
+			})
+		}
+	} else {
+		// Apply pagination
+		totalCount = len(allRelations)
+		start := offset
+		end := offset + limit
+		if start >= totalCount {
+			relations = []*Relation{}
+		} else {
+			if end > totalCount {
+				end = totalCount
+			}
+			relations = allRelations[start:end]
+		}
+		hasMore = offset+len(relations) < totalCount
 	}
 
-	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Found %d relations:\n%s", len(relations), string(relationsJSON)))), nil
+	// Build response
+	var responseText strings.Builder
+	if totalCount == 0 {
+		responseText.WriteString("No relations found for this entity.")
+	} else {
+		responseText.WriteString(fmt.Sprintf("Found %d relations", totalCount))
+		if !args.AllResults {
+			responseText.WriteString(fmt.Sprintf(" (showing %d-%d)", offset+1, offset+len(relations)))
+			if hasMore {
+				responseText.WriteString(fmt.Sprintf(", %d more available", totalCount-offset-len(relations)))
+			}
+		}
+		responseText.WriteString(":\n")
+
+		if len(relations) > 0 {
+			relationsJSON, err := json.MarshalIndent(relations, "", "  ")
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal relations: %w", err)
+			}
+			responseText.WriteString(string(relationsJSON))
+		}
+	}
+
+	if args.AllResults && s.memorySystem != nil {
+		responseText.WriteString(fmt.Sprintf("\n\n💾 Stored %d relations in memory system for future reference.", totalCount))
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(responseText.String())), nil
 }
 
 // getObservations retrieves observations for an entity
@@ -2803,21 +3472,95 @@ func (s *ForwardMCPService) getObservations(args GetObservationsArgs) (*mcp.Tool
 		return nil, fmt.Errorf("memory system is not available")
 	}
 
-	observations, err := s.memorySystem.GetObservations(args.EntityID, args.ObservationType)
+	// Get all observations from memory system
+	allObservations, err := s.memorySystem.GetObservations(args.EntityID, args.ObservationType)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get observations: %w", err)
 	}
 
-	if len(observations) == 0 {
-		return mcp.NewToolResponse(mcp.NewTextContent("No observations found for this entity.")), nil
+	// Apply pagination with safe defaults to prevent token overflow
+	limit := args.Limit
+	if limit <= 0 {
+		limit = 25 // Conservative default limit to prevent token overflow
+	}
+	if limit > 100 {
+		limit = 100 // Cap at 100 to prevent excessive responses
+	}
+	offset := args.Offset
+	if offset < 0 {
+		offset = 0
 	}
 
-	observationsJSON, err := json.MarshalIndent(observations, "", "  ")
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal observations: %w", err)
+	var observations []*Observation
+	var totalCount int
+	var hasMore bool
+
+	if args.AllResults {
+		// Store all observations in memory system for large datasets
+		observations = allObservations
+		totalCount = len(allObservations)
+		hasMore = false
+
+		// Store in memory system if available
+		entity, err := s.memorySystem.CreateEntity("observations_list", "query_result", map[string]interface{}{
+			"query_type":       "get_observations",
+			"entity_id":        args.EntityID,
+			"observation_type": args.ObservationType,
+			"total_count":      totalCount,
+			"timestamp":        time.Now().Unix(),
+		})
+		if err == nil {
+			// Store the observations data
+			observationsJSON, _ := json.Marshal(observations)
+			s.memorySystem.AddObservation(entity.ID, string(observationsJSON), "data", map[string]interface{}{
+				"data_type": "observations_list",
+				"count":     totalCount,
+			})
+		}
+	} else {
+		// Apply pagination
+		totalCount = len(allObservations)
+		start := offset
+		end := offset + limit
+		if start >= totalCount {
+			observations = []*Observation{}
+		} else {
+			if end > totalCount {
+				end = totalCount
+			}
+			observations = allObservations[start:end]
+		}
+		hasMore = offset+len(observations) < totalCount
 	}
 
-	return mcp.NewToolResponse(mcp.NewTextContent(fmt.Sprintf("Found %d observations:\n%s", len(observations), string(observationsJSON)))), nil
+	// Build response
+	var responseText strings.Builder
+	if totalCount == 0 {
+		responseText.WriteString("No observations found for this entity.")
+	} else {
+		responseText.WriteString(fmt.Sprintf("Found %d observations", totalCount))
+		if !args.AllResults {
+			responseText.WriteString(fmt.Sprintf(" (showing %d-%d)", offset+1, offset+len(observations)))
+			if hasMore {
+				responseText.WriteString(fmt.Sprintf(", %d more available", totalCount-offset-len(observations)))
+			}
+		}
+		responseText.WriteString(":\n")
+
+		if len(observations) > 0 {
+			observationsJSON, err := json.MarshalIndent(observations, "", "  ")
+			if err != nil {
+				return nil, fmt.Errorf("failed to marshal observations: %w", err)
+			}
+			responseText.WriteString(string(observationsJSON))
+		}
+	}
+
+	if args.AllResults && s.memorySystem != nil {
+		responseText.WriteString(fmt.Sprintf("\n\n💾 Stored %d observations in memory system for future reference.", totalCount))
+	}
+
+	return mcp.NewToolResponse(mcp.NewTextContent(responseText.String())), nil
 }
 
 // deleteEntity deletes an entity and all its relations and observations
@@ -4492,4 +5235,46 @@ func (s *ForwardMCPService) resolveDeviceToIP(networkID, deviceOrIP string) (str
 	}
 
 	return "", fmt.Errorf("device %s not found in network %s", deviceOrIP, networkID)
+}
+
+// listInstanceIDs lists all available Forward Networks instance IDs in the database
+func (s *ForwardMCPService) listInstanceIDs(args ListInstanceIDsArgs) (*mcp.ToolResponse, error) {
+	s.logToolCall("list_instance_ids", args, nil)
+
+	if s.database == nil {
+		return nil, fmt.Errorf("database is not available")
+	}
+
+	instances, err := s.database.GetAllInstanceIDs()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get instance IDs: %w", err)
+	}
+
+	if len(instances) == 0 {
+		return mcp.NewToolResponse(mcp.NewTextContent("No Forward Networks instances found in the database.")), nil
+	}
+
+	// Build response
+	var responseText strings.Builder
+	responseText.WriteString(fmt.Sprintf("Found %d Forward Networks instances in the database:\n\n", len(instances)))
+
+	for i, instance := range instances {
+		responseText.WriteString(fmt.Sprintf("%d. **Instance ID: %s**\n", i+1, instance.ID))
+		responseText.WriteString(fmt.Sprintf("   - Query Count: %d\n", instance.QueryCount))
+		responseText.WriteString(fmt.Sprintf("   - First Sync: %s\n", instance.FirstSync.Format("2006-01-02 15:04:05")))
+		responseText.WriteString(fmt.Sprintf("   - Last Sync: %s\n", instance.LastSync.Format("2006-01-02 15:04:05")))
+		responseText.WriteString("\n")
+	}
+
+	responseText.WriteString("**To use a specific instance:**\n")
+	responseText.WriteString("1. Set the FORWARD_INSTANCE_ID environment variable to the desired instance ID\n")
+	responseText.WriteString("2. Restart the MCP server\n")
+	responseText.WriteString("3. The server will then use queries from that instance\n\n")
+	responseText.WriteString("**Example:**\n")
+	responseText.WriteString("```bash\n")
+	responseText.WriteString("export FORWARD_INSTANCE_ID=49bd3225\n")
+	responseText.WriteString("# Then restart your MCP server\n")
+	responseText.WriteString("```")
+
+	return mcp.NewToolResponse(mcp.NewTextContent(responseText.String())), nil
 }

@@ -92,14 +92,16 @@ func NewMockForwardClient() *MockForwardClient {
 		},
 		locations: []forward.Location{
 			{
-				ID:          "location-1",
-				Name:        "Data Center 1",
-				Description: "Primary data center",
+				ID:   "location-1",
+				Name: "Data Center 1",
+				Lat:  37.7749,
+				Lng:  -122.4194,
 			},
 			{
-				ID:          "location-2",
-				Name:        "Data Center 2",
-				Description: "Secondary data center",
+				ID:   "location-2",
+				Name: "Data Center 2",
+				Lat:  40.7128,
+				Lng:  -74.0060,
 			},
 		},
 		nqeQueries: []forward.NQEQuery{
@@ -350,14 +352,133 @@ func (m *MockForwardClient) CreateLocation(networkID string, location *forward.L
 		return nil, &MockError{m.errorMessage}
 	}
 	newLocation := forward.Location{
-		ID:          "new-location-id",
-		Name:        location.Name,
-		Description: location.Description,
-		Latitude:    location.Latitude,
-		Longitude:   location.Longitude,
+		ID:            "new-location-id",
+		Name:          location.Name,
+		Lat:           location.Lat,
+		Lng:           location.Lng,
+		City:          location.City,
+		AdminDivision: location.AdminDivision,
+		Country:       location.Country,
 	}
 	m.locations = append(m.locations, newLocation)
 	return &newLocation, nil
+}
+
+func (m *MockForwardClient) CreateLocationsBulk(networkID string, locations []forward.LocationBulkPatch) error {
+	if m.shouldError {
+		return &MockError{m.errorMessage}
+	}
+	// Simulate PATCH semantics: update existing locations by ID, create new ones by name
+	for _, patch := range locations {
+		if patch.ID != "" {
+			// Update existing location by ID
+			found := false
+			for i := range m.locations {
+				if m.locations[i].ID == patch.ID {
+					if patch.Name != "" {
+						m.locations[i].Name = patch.Name
+					}
+					if patch.Lat != nil {
+						m.locations[i].Lat = *patch.Lat
+					}
+					if patch.Lng != nil {
+						m.locations[i].Lng = *patch.Lng
+					}
+					if patch.City != "" {
+						m.locations[i].City = patch.City
+					}
+					if patch.AdminDivision != "" {
+						m.locations[i].AdminDivision = patch.AdminDivision
+					}
+					if patch.Country != "" {
+						m.locations[i].Country = patch.Country
+					}
+					found = true
+					break
+				}
+			}
+			if !found {
+				// ID not found, treat as create
+				newLocation := forward.Location{
+					ID:            patch.ID,
+					Name:          patch.Name,
+					City:          patch.City,
+					AdminDivision: patch.AdminDivision,
+					Country:       patch.Country,
+				}
+				if patch.Lat != nil {
+					newLocation.Lat = *patch.Lat
+				}
+				if patch.Lng != nil {
+					newLocation.Lng = *patch.Lng
+				}
+				m.locations = append(m.locations, newLocation)
+			}
+		} else if patch.Name != "" {
+			// Create new location by name
+			newLocation := forward.Location{
+				ID:            fmt.Sprintf("location-%d", len(m.locations)+1),
+				Name:          patch.Name,
+				City:          patch.City,
+				AdminDivision: patch.AdminDivision,
+				Country:       patch.Country,
+			}
+			if patch.Lat != nil {
+				newLocation.Lat = *patch.Lat
+			}
+			if patch.Lng != nil {
+				newLocation.Lng = *patch.Lng
+			}
+			m.locations = append(m.locations, newLocation)
+		}
+	}
+	return nil
+}
+
+// TestIsCloudDevice tests the cloud device detection logic
+func TestIsCloudDevice(t *testing.T) {
+	service := &ForwardMCPService{}
+
+	// Test cases for physical devices that should NOT be blocked
+	physicalDevices := []string{
+		"fel-wps1-cloud2s02",  // Physical device with "cloud" in infrastructure role
+		"fel-wps1-cloudm3s01", // Physical device with "cloud" in infrastructure role
+		"fel-wps1-kvmd2s01",   // Physical device with "kvm" in infrastructure role
+		"fel-wps1-a7s51",      // Regular physical device
+		"switch-01",           // Regular physical device
+		"router-core-01",      // Regular physical device
+	}
+
+	// Test cases for actual cloud devices that SHOULD be blocked
+	cloudDevices := []string{
+		"csr1kv-01",         // Cisco CSR 1000V
+		"pan-fw-01",         // Palo Alto virtual firewall
+		"aws-ec2-01",        // AWS EC2 instance
+		"azure-vm-01",       // Azure virtual machine
+		"gcp-compute-01",    // GCP compute instance
+		"virtual-router-01", // Virtual router
+		"vm-database-01",    // Virtual machine
+		"container-app-01",  // Container
+		"cloud-gateway-01",  // Cloud gateway
+		"kvm-virtual-01",    // KVM virtual machine
+	}
+
+	// Test physical devices (should return false)
+	for _, device := range physicalDevices {
+		isCloud := service.isCloudDevice(device)
+		if isCloud {
+			t.Errorf("Device '%s' should NOT be identified as cloud device (it's physical)", device)
+		} else {
+			t.Logf("✓ Device '%s' correctly identified as physical device", device)
+		}
+	}
+
+	// Test cloud devices (should return true)
+	for _, device := range cloudDevices {
+		if !service.isCloudDevice(device) {
+			t.Errorf("Device '%s' should be identified as cloud device", device)
+		}
+	}
 }
 
 func (m *MockForwardClient) UpdateLocation(networkID string, locationID string, update *forward.LocationUpdate) (*forward.Location, error) {
@@ -369,8 +490,20 @@ func (m *MockForwardClient) UpdateLocation(networkID string, locationID string, 
 			if update.Name != nil {
 				m.locations[i].Name = *update.Name
 			}
-			if update.Description != nil {
-				m.locations[i].Description = *update.Description
+			if update.Lat != nil {
+				m.locations[i].Lat = *update.Lat
+			}
+			if update.Lng != nil {
+				m.locations[i].Lng = *update.Lng
+			}
+			if update.City != nil {
+				m.locations[i].City = *update.City
+			}
+			if update.AdminDivision != nil {
+				m.locations[i].AdminDivision = *update.AdminDivision
+			}
+			if update.Country != nil {
+				m.locations[i].Country = *update.Country
 			}
 			return &m.locations[i], nil
 		}

@@ -538,6 +538,48 @@ func (db *NQEDatabase) GetMetadata(key string) (string, error) {
 	return value, nil
 }
 
+// GetAllInstanceIDs returns all instance IDs that have queries in the database
+func (db *NQEDatabase) GetAllInstanceIDs() ([]InstanceInfo, error) {
+	rows, err := db.db.Query(`
+		SELECT 
+			instance_id,
+			COUNT(*) as query_count,
+			MAX(updated_at) as last_sync,
+			MIN(created_at) as first_sync
+		FROM nqe_queries 
+		GROUP BY instance_id 
+		ORDER BY last_sync DESC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("failed to query instance IDs: %w", err)
+	}
+	defer rows.Close()
+
+	var instances []InstanceInfo
+	for rows.Next() {
+		var instance InstanceInfo
+		var lastSync, firstSync int64
+		err := rows.Scan(&instance.ID, &instance.QueryCount, &lastSync, &firstSync)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan instance info: %w", err)
+		}
+		
+		instance.LastSync = time.Unix(lastSync, 0)
+		instance.FirstSync = time.Unix(firstSync, 0)
+		instances = append(instances, instance)
+	}
+
+	return instances, nil
+}
+
+// InstanceInfo represents information about a database instance
+type InstanceInfo struct {
+	ID          string    `json:"id"`
+	QueryCount  int       `json:"query_count"`
+	LastSync    time.Time `json:"last_sync"`
+	FirstSync   time.Time `json:"first_sync"`
+}
+
 // Close closes the database connection
 func (db *NQEDatabase) Close() error {
 	if db.db != nil {

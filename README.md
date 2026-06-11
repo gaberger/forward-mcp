@@ -103,7 +103,7 @@ The server reads NQE query metadata from a local SQLite database (`~/.forward-mc
 
 Notes:
 
-- The command needs the same `FORWARD_API_*` environment variables as the server (a `.env` file in the working directory also works).
+- The command needs `FORWARD_API_BASE_URL`, `FORWARD_API_KEY`, and `FORWARD_API_SECRET` in its environment. **Credentials configured in an MCP client's config (e.g. the `env` block in `claude_desktop_config.json`) are only passed to the server the client spawns — they are not visible to a terminal run.** Export them in your shell or put them in a `.env` file in the working directory (gitignored).
 - Syncs are incremental: queries whose commit IDs are unchanged are skipped. Use `--force` to refetch everything.
 - A metadata-preserving merge guarantees a basic sync never erases rich metadata from a previous `--enhanced` run.
 - Embeddings use the provider from `FORWARD_EMBEDDING_PROVIDER`: `keyword` (default — fast, free, offline) or `openai` (requires `OPENAI_API_KEY`, makes paid API calls).

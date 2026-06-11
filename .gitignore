@@ -9,6 +9,9 @@
 /server
 /forward-mcp
 
+# Generated embedding cache (rebuild with `make hydrate-full`)
+/spec/nqe-embeddings.json
+
 # IDE files
 .idea/
 .vscode/

@@ -1,0 +1,126 @@
+{
+  "feature": "hex-refactor",
+  "description": "Refactor forward-mcp to use hex (ports & adapters) layered architecture",
+  "specs": [
+    {
+      "id": "S01",
+      "category": "HappyPath",
+      "description": "Domain entities are independent of any external packages",
+      "given": "A new domain entity type added to domain/entities/",
+      "when": "go build is run on the domain package",
+      "then": "Build succeeds with zero dependencies on internal/adapters, internal/ports, internal/usecases",
+      "negative_spec": false,
+      "domain_conventions": {
+        "rule": "Domain layer must have zero external Go dependencies (except stdlib)"
+      }
+    },
+    {
+      "id": "S02",
+      "category": "HappyPath",
+      "description": "Port interfaces define contracts between layers",
+      "given": "An adapter implementation needs to communicate with external systems",
+      "when": "A port interface is defined in ports/",
+      "then": "The interface uses only domain types in its method signatures",
+      "negative_spec": false,
+      "domain_conventions": {
+        "rule": "Ports may only import domain layer, not adapters"
+      }
+    },
+    {
+      "id": "S03",
+      "category": "HappyPath",
+      "description": "Forward API client adapter compiles and works",
+      "given": "The forward API client is moved to internal/adapters/forward",
+      "when": "go build ./internal/adapters/forward is run",
+      "then": "Build succeeds and implements ports.ForwardClientInterface",
+      "negative_spec": false
+    },
+    {
+      "id": "S04",
+      "category": "HappyPath",
+      "description": "Semantic cache adapter uses port interfaces",
+      "given": "The semantic cache is refactored to use ports.CacheInterface",
+      "when": "Cache operations are invoked",
+      "then": "The cache implementation satisfies the port contract",
+      "negative_spec": false
+    },
+    {
+      "id": "S05",
+      "category": "HappyPath",
+      "description": "NQE database adapter compiles independently",
+      "given": "The NQE database code is moved to internal/adapters/database",
+      "when": "go build ./internal/adapters/database is run",
+      "then": "Build succeeds with no errors",
+      "negative_spec": false
+    },
+    {
+      "id": "S06",
+      "category": "HappyPath",
+      "description": "Memory system adapter compiles independently",
+      "given": "The memory system code is moved to internal/adapters/memory",
+      "when": "go build ./internal/adapters/memory is run",
+      "then": "Build succeeds with no errors",
+      "negative_spec": false
+    },
+    {
+      "id": "S07",
+      "category": "HappyPath",
+      "description": "Bloom search adapter compiles and integrates",
+      "given": "The bloom search code is moved to internal/adapters/cache",
+      "when": "go build ./internal/adapters/cache is run",
+      "then": "Build succeeds with no errors",
+      "negative_spec": false
+    },
+    {
+      "id": "S08",
+      "category": "HappyPath",
+      "description": "Use cases orchestrate through port interfaces",
+      "given": "The MCP service in usecases/ uses adapters through ports",
+      "when": "A tool is invoked via MCP",
+      "then": "The usecases layer has no direct import of adapter implementations",
+      "negative_spec": false,
+      "domain_conventions": {
+        "rule": "Use cases import only ports, not concrete adapters"
+      }
+    },
+    {
+      "id": "S09",
+      "category": "HappyPath",
+      "description": "CLI entry point builds with new structure",
+      "given": "cmd/server/main.go is updated to new package paths",
+      "when": "go build -o server ./cmd/server is run",
+      "then": "Binary builds successfully",
+      "negative_spec": false
+    },
+    {
+      "id": "S10",
+      "category": "HappyPath",
+      "description": "Full test suite passes with hex architecture",
+      "given": "All code has been refactored to hex structure",
+      "when": "go test ./... is run",
+      "then": "All tests pass (or known failures are documented)",
+      "negative_spec": false
+    },
+    {
+      "id": "S11",
+      "category": "EdgeCase",
+      "description": "Backward compatibility for external consumers",
+      "given": "External code imports the old internal/service package",
+      "when": "Code is refactored",
+      "then": "Type aliases maintain backward compatibility",
+      "negative_spec": true
+    },
+    {
+      "id": "S12",
+      "category": "Security",
+      "description": "No adapter imports another adapter directly",
+      "given": "An adapter file in internal/adapters/",
+      "when": "Imports are analyzed",
+      "then": "No import path contains internal/adapters/* (except self)",
+      "negative_spec": true,
+      "domain_conventions": {
+        "rule": "Adapters must communicate through ports, not directly"
+      }
+    }
+  ]
+}

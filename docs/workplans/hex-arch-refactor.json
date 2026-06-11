@@ -1,0 +1,141 @@
+{
+  "id": "hex-arch-refactor",
+  "name": "Hex Architecture Refactoring",
+  "description": "Refactor forward-mcp to use hex layered architecture with domain, ports, usecases, and adapters",
+  "project_id": "forward-mcp-1l6h7t9",
+  "phases": [
+    {
+      "id": "phase-1-domain",
+      "name": "Extract Domain Layer",
+      "description": "Create domain entities and services with no external dependencies",
+      "tasks": [
+        {
+          "id": "task-1-1",
+          "title": "Create internal/domain/entities package",
+          "description": "Extract core domain models: Query, Result, Network, Snapshot, etc.",
+          "agent": "general-purpose",
+          "status": "pending"
+        },
+        {
+          "id": "task-1-2",
+          "title": "Create internal/domain/services package",
+          "description": "Extract domain services: query validation, result processing, caching rules",
+          "agent": "general-purpose",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-ports",
+      "name": "Define Port Interfaces",
+      "description": "Create interfaces defining how domain interacts with outside world",
+      "tasks": [
+        {
+          "id": "task-2-1",
+          "title": "Create CachePort interface",
+          "description": "Define cache operations: Get, Set, Delete, Clear, GetSimilar",
+          "agent": "general-purpose",
+          "status": "pending"
+        },
+        {
+          "id": "task-2-2",
+          "title": "Create DatabasePort interface",
+          "description": "Define database operations: Query, Insert, Update, Delete",
+          "agent": "general-purpose",
+          "status": "pending"
+        },
+        {
+          "id": "task-2-3",
+          "title": "Create APIClientPort interface",
+          "description": "Define Forward API client operations: GetNetworks, Query, GetSnapshot",
+          "agent": "general-purpose",
+          "status": "pending"
+        },
+        {
+          "id": "task-2-4",
+          "title": "Create MemoryPort interface",
+          "description": "Define knowledge graph operations: AddEntity, AddRelation, Query",
+          "agent": "general-purpose",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-adapters",
+      "name": "Implement Adapters",
+      "description": "Move existing implementations to adapter packages",
+      "tasks": [
+        {
+          "id": "task-3-1",
+          "title": "Create cache adapter",
+          "description": "Move semantic_cache.go and bloom_search.go to adapters/cache/",
+          "agent": "general-purpose",
+          "status": "pending"
+        },
+        {
+          "id": "task-3-2",
+          "title": "Create database adapter",
+          "description": "Move nqe_db.go and nqe_query_index.go to adapters/database/",
+          "agent": "general-purpose",
+          "status": "pending"
+        },
+        {
+          "id": "task-3-3",
+          "title": "Create API client adapter",
+          "description": "Move forward/client.go to adapters/client/",
+          "agent": "general-purpose",
+          "status": "pending"
+        },
+        {
+          "id": "task-3-4",
+          "title": "Create memory adapter",
+          "description": "Move memory_system.go to adapters/memory/",
+          "agent": "general-purpose",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-usecases",
+      "name": "Create Use Cases",
+      "description": "Refactor services to use ports instead of concrete implementations",
+      "tasks": [
+        {
+          "id": "task-4-1",
+          "title": "Refactor mcp_service.go",
+          "description": "Update MCP service to inject ports and call use cases",
+          "agent": "general-purpose",
+          "status": "pending"
+        },
+        {
+          "id": "task-4-2",
+          "title": "Update tool handlers",
+          "description": "Update tools.go to use port-based services",
+          "agent": "general-purpose",
+          "status": "pending"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-tests",
+      "name": "Add Integration Tests",
+      "description": "Verify refactoring doesn't break functionality",
+      "tasks": [
+        {
+          "id": "task-5-1",
+          "title": "Run unit tests",
+          "description": "Run go test to verify no regressions",
+          "agent": "general-purpose",
+          "status": "pending"
+        },
+        {
+          "id": "task-5-2",
+          "title": "Run build check",
+          "description": "Run go build to verify compilation",
+          "agent": "general-purpose",
+          "status": "pending"
+        }
+      ]
+    }
+  ]
+}

@@ -41,5 +41,9 @@ vendor/
 
 claude_desktop_config.json
 
+# Local AI tooling state
+.claude/
+.hex/
+
 nqe_queries.db.claude-flow/
 forward-mcp-server

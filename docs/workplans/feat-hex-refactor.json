@@ -1,0 +1,130 @@
+{
+  "id": "feat-hex-refactor",
+  "name": "Hex Architecture Refactoring",
+  "description": "Refactor forward-mcp to use hex layered architecture with domain, ports, usecases, and adapters",
+  "project_id": "forward-mcp-1l6h7t9",
+  "phases": [
+    {
+      "id": "phase-1-domain",
+      "name": "Extract Domain Layer",
+      "description": "Create domain entities with no external dependencies",
+      "tasks": [
+        {
+          "id": "task-1-1",
+          "title": "Extract domain entities",
+          "description": "Move NQERunResult, NQEQuery, Network, Device, Snapshot, Location, PathSearch types to domain/entities/models.go",
+          "agent": "general-purpose",
+          "status": "pending",
+          "done_condition": "go build ./... passes - no forward package dependency in domain"
+        }
+      ]
+    },
+    {
+      "id": "phase-2-ports",
+      "name": "Define Port Interfaces",
+      "description": "Create interfaces defining how domain interacts with outside world",
+      "tasks": [
+        {
+          "id": "task-2-1",
+          "title": "Create port interfaces",
+          "description": "Extract CacheInterface from semantic_cache.go and ClientInterface from forward/client.go to ports/",
+          "agent": "general-purpose",
+          "status": "pending",
+          "done_condition": "ports/cache.go and ports/forward.go compile with domain types"
+        }
+      ]
+    },
+    {
+      "id": "phase-3-adapters",
+      "name": "Move Adapters",
+      "description": "Move adapter implementations to proper packages",
+      "tasks": [
+        {
+          "id": "task-3-1",
+          "title": "Move Forward API client",
+          "description": "Move internal/forward to internal/adapters/forward, update package name",
+          "agent": "general-purpose",
+          "status": "pending",
+          "done_condition": "go build ./... passes - internal/adapters/forward compiles"
+        },
+        {
+          "id": "task-3-2",
+          "title": "Move semantic cache",
+          "description": "Move semantic cache to internal/adapters/cache, update to use ports.CacheInterface",
+          "agent": "general-purpose",
+          "status": "pending",
+          "done_condition": "go build ./... passes - semantic_cache compiles with ports"
+        },
+        {
+          "id": "task-3-3",
+          "title": "Move NQE database",
+          "description": "Move nqe_db.go and nqe_query_index.go to internal/adapters/database",
+          "agent": "general-purpose",
+          "status": "pending",
+          "done_condition": "go build ./... passes - nqe_db compiles"
+        },
+        {
+          "id": "task-3-4",
+          "title": "Move memory system",
+          "description": "Move memory_system.go and api_memory_tracker.go to internal/adapters/memory",
+          "agent": "general-purpose",
+          "status": "pending",
+          "done_condition": "go build ./... passes - memory_system compiles"
+        },
+        {
+          "id": "task-3-5",
+          "title": "Move bloom search",
+          "description": "Move bloom_search.go to internal/adapters/cache",
+          "agent": "general-purpose",
+          "status": "pending",
+          "done_condition": "go build ./... passes - bloom_search compiles"
+        }
+      ]
+    },
+    {
+      "id": "phase-4-usecases",
+      "name": "Refactor Use Cases",
+      "description": "Move and refactor MCP service to use port interfaces",
+      "tasks": [
+        {
+          "id": "task-4-1",
+          "title": "Refactor MCP service",
+          "description": "Move mcp_service.go to usecases/, refactor to import from ports not adapters",
+          "agent": "general-purpose",
+          "status": "pending",
+          "done_condition": "go build ./cmd/... passes - server binary builds"
+        }
+      ]
+    },
+    {
+      "id": "phase-5-cli",
+      "name": "Update Entry Points",
+      "description": "Update CLI and scripts to new package paths",
+      "tasks": [
+        {
+          "id": "task-5-1",
+          "title": "Update cmd/server/main.go",
+          "description": "Update import paths in main.go to use new usecases package",
+          "agent": "general-purpose",
+          "status": "pending",
+          "done_condition": "go build -o server ./cmd/server && ./server --help works"
+        }
+      ]
+    },
+    {
+      "id": "phase-6-integration",
+      "name": "Validate & Test",
+      "description": "Run full test suite and validate hex boundaries",
+      "tasks": [
+        {
+          "id": "task-6-1",
+          "title": "Run full test suite",
+          "description": "Run go test ./... and hex analyze to validate architecture",
+          "agent": "general-purpose",
+          "status": "pending",
+          "done_condition": "go test ./... passes && hex analyze . shows 0 violations"
+        }
+      ]
+    }
+  ]
+}

@@ -10,7 +10,8 @@ Forward MCP is an open-source server that provides a set of tools and APIs for i
 - Tool behavior annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`) so clients can distinguish queries from destructive operations
 - Schema-enforced input validation with LLM-friendly error messages
 - Supports prompt workflows and contextual resources
-- Instance lock protection prevents multiple server instances
+- Out-of-process database hydration (`hydrate` CLI subcommand) — long-running syncs survive MCP client restarts
+- Advisory instance lock (warns about overlapping server instances; SQLite WAL arbitrates shared data access)
 - Bloomsearch integration for efficient handling of large NQE results, with automatic bloom filter generation and persistent indexes
 - Semantic cache and knowledge-graph memory system for query results
 - Designed for easy integration and automation
@@ -80,6 +81,33 @@ Run the server:
 ```
 
 The server will start and listen for MCP protocol messages via stdio (compatible with Claude Desktop, Claude Code, and other MCP clients).
+
+## NQE Database Hydration
+
+The server reads NQE query metadata from a local SQLite database (`~/.forward-mcp/data/nqe_queries.db`). Populating and refreshing that database ("hydration") runs as a **separate CLI command, not inside the MCP server**: MCP clients kill and respawn stdio servers at will (config reloads, reconnects), which would silently kill any long-running sync inside the serving process. The hydrate command runs in its own process, so nothing the client does can interrupt it. SQLite WAL mode lets it write while server instances keep reading.
+
+```sh
+# Fast basic sync — query list only, a few seconds
+./forward-mcp hydrate                # or: make hydrate
+
+# Rich metadata (intent/description/source code) — one API call per
+# changed query, can take many minutes on a cold database
+./forward-mcp hydrate --enhanced
+
+# Also rebuild the semantic-search embedding cache (spec/nqe-embeddings.json)
+./forward-mcp hydrate --embeddings   # or: make hydrate-full
+
+# All flags
+./forward-mcp hydrate -h
+```
+
+Notes:
+
+- The command needs the same `FORWARD_API_*` environment variables as the server (a `.env` file in the working directory also works).
+- Syncs are incremental: queries whose commit IDs are unchanged are skipped. Use `--force` to refetch everything.
+- A metadata-preserving merge guarantees a basic sync never erases rich metadata from a previous `--enhanced` run.
+- Embeddings use the provider from `FORWARD_EMBEDDING_PROVIDER`: `keyword` (default — fast, free, offline) or `openai` (requires `OPENAI_API_KEY`, makes paid API calls).
+- After hydrating, call the `refresh_query_index` MCP tool to load the new data into a running server, or restart the client. The `hydrate_database` MCP tool reports database staleness and prints the exact command to run.
 
 ## Bloomsearch Capabilities
 

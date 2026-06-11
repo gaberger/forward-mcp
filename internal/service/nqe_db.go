@@ -89,7 +89,10 @@ func NewNQEDatabase(logger *logger.Logger, instanceID string) (*NQEDatabase, err
 	}
 
 	dbPath := filepath.Join(dataDir, "nqe_queries.db")
-	db, err := sql.Open("sqlite3", dbPath)
+	// WAL allows the out-of-process `hydrate` CLI to write while server
+	// processes read; busy_timeout makes brief lock contention wait instead
+	// of failing with SQLITE_BUSY.
+	db, err := sql.Open("sqlite3", dbPath+"?_journal_mode=WAL&_busy_timeout=5000")
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}

@@ -18,7 +18,7 @@ LDFLAGS=-ldflags "-s -w"
 # CGO must be enabled for SQLite database functionality
 CGO_ENABLED=1
 
-.PHONY: all build build-test-client test test-quick test-integration test-all test-coverage test-coverage-all clean run run-test-client dev deps embedding-status embedding-generate-keyword embedding-generate-openai embedding-cache-info embedding-benchmark embedding-clean database-status test-database test-metadata test-enhanced database-clean metadata-stats test-semantic-search demo-smart-search test-path-search-integration test-path-search-mcp lint
+.PHONY: all build hydrate hydrate-full build-test-client test test-quick test-integration test-all test-coverage test-coverage-all clean run run-test-client dev deps embedding-status embedding-generate-keyword embedding-generate-openai embedding-cache-info embedding-benchmark embedding-clean database-status test-database test-metadata test-enhanced database-clean metadata-stats test-semantic-search demo-smart-search test-path-search-integration test-path-search-mcp lint
 
 all: test build
 
@@ -27,6 +27,16 @@ build:
 	@echo "Building $(BINARY_NAME)..."
 	@mkdir -p $(BUILD_DIR)
 	CGO_ENABLED=$(CGO_ENABLED) $(GOBUILD) $(LDFLAGS) -o $(BUILD_DIR)/$(BINARY_NAME) $(MAIN_FILE)
+
+# Hydrate the NQE database (runs outside the MCP server so client restarts can't kill it)
+hydrate:
+	@echo "🔄 Hydrating NQE database (basic sync)..."
+	CGO_ENABLED=$(CGO_ENABLED) $(GOCMD) run $(MAIN_FILE) hydrate
+
+# Full hydration: rich metadata + embedding cache rebuild
+hydrate-full:
+	@echo "🔄 Hydrating NQE database (enhanced metadata + embeddings, may take a while)..."
+	CGO_ENABLED=$(CGO_ENABLED) $(GOCMD) run $(MAIN_FILE) hydrate --enhanced --embeddings
 
 # Build the test client
 build-test-client:

@@ -269,10 +269,8 @@ type SmartQueryWorkflowArgs struct {
 
 // Database Hydration Tools Arguments
 type HydrateDatabaseArgs struct {
-	ForceRefresh         bool `json:"force_refresh,omitempty" jsonschema:"Force refresh all queries from API even if database has data (default: false)"`
-	EnhancedMode         bool `json:"enhanced_mode,omitempty" jsonschema:"Use enhanced API mode for metadata enrichment (default: true)"`
-	MaxRetries           int  `json:"max_retries,omitempty" jsonschema:"Maximum number of retry attempts for API calls (default: 3)"`
-	RegenerateEmbeddings bool `json:"regenerate_embeddings,omitempty" jsonschema:"Automatically regenerate AI embeddings after hydration for improved semantic search (default: false)"`
+	// No parameters needed - hydration runs via the `hydrate` CLI subcommand;
+	// this tool reports staleness and the command to run.
 }
 
 type RefreshQueryIndexArgs struct {

@@ -663,7 +663,7 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 
 	// Database Hydration Tools
 	addTool(server, "hydrate_database",
-		"Hydrate the NQE database by loading queries from the Forward Networks API. Use this to refresh the database with latest query metadata and ensure optimal performance for search operations. Automatically refreshes the query index and optionally regenerates AI embeddings.",
+		"Report how stale the NQE query database is and get the CLI command to refresh it. Hydration runs out-of-process (`forward-mcp-server hydrate`) so client restarts cannot interrupt it; after running the command, call refresh_query_index to pick up the new data.",
 		s.hydrateDatabase)
 
 	addTool(server, "refresh_query_index",
@@ -3095,99 +3095,61 @@ func (s *ForwardMCPService) initializeQueryIndex(args InitializeQueryIndexArgs) 
 	return newToolResponse(newTextContent(response)), nil
 }
 
-// hydrateDatabase hydrates the database by loading queries from the Forward Networks API
+// hydrateDatabase reports database staleness and explains how to hydrate.
+// Hydration itself runs out-of-process via the `hydrate` CLI subcommand:
+// MCP clients kill and respawn stdio servers at will, so long-running sync
+// work inside this process would be silently lost (it was - see git history).
 func (s *ForwardMCPService) hydrateDatabase(args HydrateDatabaseArgs) (*mcp.CallToolResult, error) {
 	if s.database == nil {
 		return nil, fmt.Errorf("database is not available")
 	}
 
-	// Set defaults
-	if args.MaxRetries == 0 {
-		args.MaxRetries = 3
-	}
-
-	s.logger.Info("🔄 Starting database hydration (async mode)...")
-
-	// Check if we need to force refresh or if database is empty
-	existingQueries, err := s.database.LoadQueries()
+	queries, err := s.database.LoadQueries()
 	if err != nil {
 		s.logger.Warn("🔄 Failed to load existing queries: %v", err)
-		existingQueries = []forward.NQEQueryDetail{}
+		queries = []forward.NQEQueryDetail{}
 	}
 
-	if len(existingQueries) > 0 && !args.ForceRefresh {
-		return newToolResponse(newTextContent(fmt.Sprintf("Database already contains %d queries. Use force_refresh=true to refresh anyway.", len(existingQueries)))), nil
+	enriched := 0
+	for _, q := range queries {
+		if q.Intent != "" || q.Description != "" {
+			enriched++
+		}
 	}
 
-	// Run hydration in background
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
-		defer cancel()
-		var queries []forward.NQEQueryDetail
-		var err error
-		if args.EnhancedMode {
-			existingCommitIDs := make(map[string]string)
-			for _, query := range existingQueries {
-				if query.LastCommit.ID != "" {
-					existingCommitIDs[query.Path] = query.LastCommit.ID
-				}
-			}
-			queries, err = s.forwardClient.GetNQEAllQueriesEnhancedWithCacheContext(ctx, existingCommitIDs)
-			if err != nil {
-				s.logger.Warn("🔄 Enhanced API failed, falling back to basic API: %v", err)
-				queries, err = s.database.loadFromBasicAPI(s.forwardClient, s.logger)
-			}
-		} else {
-			queries, err = s.database.loadFromBasicAPI(s.forwardClient, s.logger)
+	lastSync := "never"
+	staleness := "unknown"
+	if v, err := s.database.GetMetadata("last_sync"); err == nil && v != "" {
+		lastSync = v
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			staleness = fmt.Sprintf("%.1f days", time.Since(t).Hours()/24)
 		}
-		if err != nil {
-			s.logger.Error("failed to load queries from API: %v", err)
-			return
-		}
-		if !args.ForceRefresh && len(existingQueries) > 0 {
-			queries = s.database.mergeQueries(existingQueries, queries)
-		}
-		if err := s.database.SaveQueries(queries); err != nil {
-			s.logger.Error("failed to save queries to database: %v", err)
-			return
-		}
-		if err := s.database.SetMetadata("last_sync", time.Now().Format(time.RFC3339)); err != nil {
-			s.logger.Warn("🔄 Failed to update sync time: %v", err)
-		}
-		s.logger.Info("🔄 Database hydration completed with %d queries", len(queries))
-		s.logger.Info("🔄 Refreshing query index after hydration...")
-		if s.queryIndex != nil {
-			if err := s.queryIndex.LoadFromQueries(queries); err != nil {
-				s.logger.Warn("🔄 Failed to refresh query index: %v", err)
-			} else {
-				s.logger.Info("🔄 Query index refreshed with %d queries", len(queries))
-				stats := s.queryIndex.GetStatistics()
-				embeddedCount := stats["embedded_queries"].(int)
-				if embeddedCount > 0 && embeddedCount < len(queries) {
-					s.logger.Info("🧠 Consider regenerating embeddings to include new queries in semantic search")
-				}
-			}
-		}
-		if s.queryIndex != nil && args.RegenerateEmbeddings {
-			s.logger.Info("🧠 Regenerating AI embeddings after hydration...")
-			if _, ok := s.queryIndex.embeddingService.(*MockEmbeddingService); ok {
-				s.logger.Warn("⚠️  Cannot generate embeddings: OpenAI API key not configured")
-			} else {
-				if err := s.queryIndex.GenerateEmbeddings(); err != nil {
-					s.logger.Warn("🧠 Failed to regenerate embeddings: %v", err)
-				} else {
-					updatedStats := s.queryIndex.GetStatistics()
-					newEmbeddedCount := updatedStats["embedded_queries"].(int)
-					newCoverage := updatedStats["embedding_coverage"].(float64)
-					s.logger.Info("🧠 Successfully regenerated %d embeddings (%.1f%% coverage)", newEmbeddedCount, newCoverage*100)
-				}
-			}
-		}
-		// Optionally: log completion
-		s.logger.Info("Database hydration background process complete.")
-	}()
+	}
 
-	return newToolResponse(newTextContent("Database hydration has started in the background. This process may take several minutes. You can continue using other tools, or check the status with get_database_status. Once hydration is complete, the query index will be refreshed automatically.")), nil
+	embeddedCount := 0
+	if s.queryIndex != nil {
+		if stats := s.queryIndex.GetStatistics(); stats != nil {
+			if n, ok := stats["embedded_queries"].(int); ok {
+				embeddedCount = n
+			}
+		}
+	}
+
+	exePath := "forward-mcp-server"
+	if p, err := os.Executable(); err == nil {
+		exePath = p
+	}
+
+	var b strings.Builder
+	b.WriteString("Database hydration runs as a CLI command, outside this MCP server (long syncs would be killed when the client restarts the server).\n\n")
+	fmt.Fprintf(&b, "Current state:\n• Queries in database: %d (%d with rich metadata)\n• Last sync: %s (%s ago)\n• Embedded for semantic search: %d\n\n", len(queries), enriched, lastSync, staleness, embeddedCount)
+	b.WriteString("To hydrate, ask the user to run in a terminal:\n")
+	fmt.Fprintf(&b, "  %s hydrate                  # fast basic sync (query list only)\n", exePath)
+	fmt.Fprintf(&b, "  %s hydrate --enhanced       # rich metadata, slower (per-query API calls)\n", exePath)
+	fmt.Fprintf(&b, "  %s hydrate --embeddings     # also rebuild the semantic search cache\n\n", exePath)
+	b.WriteString("After it completes, call the refresh_query_index tool to load the new data into this server without restarting.")
+
+	return newToolResponse(newTextContent(b.String())), nil
 }
 
 // refreshQueryIndex refreshes the query index from the current database content

@@ -2,6 +2,8 @@ package main
 
 import (
 	"context"
+	"flag"
+	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
@@ -24,6 +26,13 @@ const serverInstructions = "MCP server for Forward Networks: network discovery, 
 	"Prefer search_paths_bulk for path analysis."
 
 func main() {
+	// Subcommands run in their own process, outside the MCP server lifecycle,
+	// so a client respawn of the stdio server cannot interrupt them.
+	if len(os.Args) > 1 && os.Args[1] == "hydrate" {
+		runHydrateCommand(os.Args[2:])
+		return
+	}
+
 	// Initialize logger
 	logger := logger.New()
 
@@ -33,29 +42,37 @@ func main() {
 	// Create logger
 	logger.Info("Forward MCP Server starting...")
 
-	// Acquire instance lock to prevent multiple servers
+	// Best-effort instance lock. Clients like Claude Desktop may briefly spawn
+	// overlapping server processes (config reload, reconnect); exiting fatally
+	// here makes every such respawn look like a crash and drops in-flight tool
+	// calls. SQLite (WAL + busy_timeout) arbitrates shared data access, so
+	// concurrent instances are safe - we only warn for visibility.
 	lockDir := os.Getenv("FORWARD_LOCK_DIR")
 	if lockDir == "" {
 		lockDir = "/tmp"
 	}
 	instanceLock := instancelock.NewInstanceLock(lockDir)
+	lockAcquired := false
 
-	// Check if another instance is already running
 	if running, pid, err := instancelock.CheckRunningInstance(lockDir); running {
-		logger.Fatalf("Another instance of Forward MCP Server is already running (PID: %d)", pid)
+		logger.Warn("Another Forward MCP Server instance appears to be running (PID: %d) - continuing anyway", pid)
 	} else if err != nil {
 		logger.Error("Warning: Could not check for running instances: %v", err)
 	}
 
-	// Try to acquire the lock
 	logger.Debug("Acquiring instance lock at: %s", instanceLock.GetLockFilePath())
 	if err := instanceLock.Acquire(3, 500*time.Millisecond); err != nil {
-		logger.Fatalf("Failed to acquire instance lock: %v\nAnother instance may be running or starting up.", err)
+		logger.Warn("Could not acquire instance lock (%v) - continuing without it", err)
+	} else {
+		lockAcquired = true
+		logger.Debug("Instance lock acquired successfully")
 	}
-	logger.Debug("Instance lock acquired successfully")
 
 	// Ensure lock is released on exit
 	defer func() {
+		if !lockAcquired {
+			return
+		}
 		logger.Debug("Releasing instance lock...")
 		if err := instanceLock.Release(); err != nil {
 			logger.Error("Failed to release instance lock: %v", err)
@@ -171,6 +188,41 @@ func main() {
 
 	logger.Info("Server shutdown complete")
 	if runErr != nil {
+		os.Exit(1)
+	}
+}
+
+// runHydrateCommand implements `forward-mcp-server hydrate`: a synchronous,
+// out-of-process database hydration. Heavy sync work lives here instead of in
+// the MCP serving process, which clients kill and respawn at will.
+func runHydrateCommand(args []string) {
+	flags := flag.NewFlagSet("hydrate", flag.ExitOnError)
+	enhanced := flags.Bool("enhanced", false, "fetch full metadata (intent/description/source); one API call per changed query, slower")
+	embeddings := flags.Bool("embeddings", false, "regenerate the embedding cache after syncing")
+	force := flags.Bool("force", false, "ignore stored commit IDs and refetch everything")
+	timeout := flags.Duration("timeout", 30*time.Minute, "overall budget for the API fetch")
+	flags.Usage = func() {
+		fmt.Fprintf(flags.Output(), "Usage: %s hydrate [flags]\n\nSyncs the NQE query database from the Forward Networks API.\nRun a basic sync first; add --enhanced for rich metadata and --embeddings to rebuild semantic search.\n\nFlags:\n", os.Args[0])
+		flags.PrintDefaults()
+	}
+	if err := flags.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	log := logger.New()
+	cfg := config.LoadConfig()
+
+	err := service.RunHydrateCLI(cfg, log, service.HydrateCLIOptions{
+		Enhanced:   *enhanced,
+		Embeddings: *embeddings,
+		Force:      *force,
+		Timeout:    *timeout,
+	})
+	if closeErr := log.Close(); closeErr != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to close logger: %v\n", closeErr)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "hydrate failed: %v\n", err)
 		os.Exit(1)
 	}
 }

@@ -329,16 +329,19 @@ func (idx *NQEQueryIndex) loadEmbeddingsFromCache() error {
 	return nil
 }
 
-// saveEmbeddingsToCache saves generated embeddings to disk for offline use
+// saveEmbeddingsToCache saves generated embeddings to disk for offline use.
+// Takes the read lock itself; callers must not hold idx.mutex.
 func (idx *NQEQueryIndex) saveEmbeddingsToCache() error {
 	// Create a map of path -> embedding for reliable lookup
 	embeddingsCache := make(map[string][]float32)
 
+	idx.mutex.RLock()
 	for _, query := range idx.queries {
 		if len(query.Embedding) > 0 {
 			embeddingsCache[query.Path] = query.Embedding
 		}
 	}
+	idx.mutex.RUnlock()
 
 	data, err := json.MarshalIndent(embeddingsCache, "", "  ")
 	if err != nil {
@@ -353,20 +356,42 @@ func (idx *NQEQueryIndex) saveEmbeddingsToCache() error {
 	return nil
 }
 
-// GenerateEmbeddings creates embeddings for all queries using the embedding service
+// GenerateEmbeddings creates embeddings for all queries using the embedding service.
+// Generation runs WITHOUT holding the index lock - a full run can take minutes
+// (one provider call per query) and holding the write lock for that long would
+// block every search tool on the server. New embeddings are published to the
+// shared entries in short locked batches instead.
 func (idx *NQEQueryIndex) GenerateEmbeddings() error {
-	idx.mutex.Lock()
-	defer idx.mutex.Unlock()
-
 	// Check if we can actually generate embeddings
 	if _, ok := idx.embeddingService.(*MockEmbeddingService); ok {
 		return fmt.Errorf("cannot generate real embeddings with mock service - set OPENAI_API_KEY")
 	}
 
-	idx.logger.Info("Generating embeddings for %d NQE queries...", len(idx.queries))
+	// Snapshot the entry list under the read lock; the entries themselves are
+	// only mutated through the locked flushes below.
+	idx.mutex.RLock()
+	entries := make([]*NQEQueryIndexEntry, len(idx.queries))
+	copy(entries, idx.queries)
+	idx.mutex.RUnlock()
+
+	idx.logger.Info("Generating embeddings for %d NQE queries...", len(entries))
+
+	pending := make(map[*NQEQueryIndexEntry][]float32)
+	flush := func() {
+		if len(pending) == 0 {
+			return
+		}
+		idx.mutex.Lock()
+		for entry, embedding := range pending {
+			entry.Embedding = embedding
+			idx.embeddings[entry.QueryID] = embedding
+		}
+		idx.mutex.Unlock()
+		pending = make(map[*NQEQueryIndexEntry][]float32)
+	}
 
 	successCount := 0
-	for i, query := range idx.queries {
+	for i, query := range entries {
 		// Skip if embedding already exists (for resuming)
 		if len(query.Embedding) > 0 {
 			successCount++
@@ -395,17 +420,17 @@ func (idx *NQEQueryIndex) GenerateEmbeddings() error {
 			embedding32[j] = float32(v)
 		}
 
-		query.Embedding = embedding32
-		idx.embeddings[query.QueryID] = embedding32
+		pending[query] = embedding32
 		successCount++
 
 		// Log progress every 50 queries (more frequent updates)
 		if (i+1)%50 == 0 {
-			idx.logger.Info("Generated embeddings for %d/%d queries (%.1f%%)", i+1, len(idx.queries), float64(i+1)/float64(len(idx.queries))*100)
+			idx.logger.Info("Generated embeddings for %d/%d queries (%.1f%%)", i+1, len(entries), float64(i+1)/float64(len(entries))*100)
 		}
 
-		// Save progress incrementally every 100 queries to avoid losing work
+		// Publish and save progress incrementally every 100 queries to avoid losing work
 		if successCount%100 == 0 {
+			flush()
 			idx.logger.Info("Saving incremental progress (%d embeddings)...", successCount)
 			if err := idx.saveEmbeddingsToCache(); err != nil {
 				idx.logger.Error("Failed to save incremental cache: %v", err)
@@ -415,6 +440,7 @@ func (idx *NQEQueryIndex) GenerateEmbeddings() error {
 		}
 	}
 
+	flush()
 	idx.logger.Info("Successfully generated embeddings for %d queries", successCount)
 
 	// Save final embeddings to cache

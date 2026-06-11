@@ -49,7 +49,15 @@ make test-coverage
 
 ## Database & Embedding Management
 
+**Hydration runs out-of-process** (CLI subcommand, not inside the MCP server) so client restarts can't kill it. The `hydrate_database` MCP tool only reports staleness; after hydrating, call the `refresh_query_index` tool to load new data into a running server.
+
 ```bash
+# Hydrate the NQE database (basic sync, seconds)
+make hydrate            # = ./bin/forward-mcp-server hydrate
+
+# Full hydration: enhanced metadata + embedding cache (minutes)
+make hydrate-full       # = ./bin/forward-mcp-server hydrate --enhanced --embeddings
+
 # Check database status and metadata coverage
 make database-status
 

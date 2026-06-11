@@ -2643,14 +2643,29 @@ func (s *ForwardMCPService) getOSSupport(args GetOSSupportArgs) (*mcp.CallToolRe
 func (s *ForwardMCPService) searchConfigs(args SearchConfigsArgs) (*mcp.CallToolResult, error) {
 	s.logToolCall("search_configs", args, nil)
 
+	// The /Devices/Config Search query expects three parameters:
+	//   Operating_Systems: List<OS> (empty = all), Device_Name_Patterns: List<String>,
+	//   Config_Pattern: PatternBlocks (newline-separated, space-indented block pattern;
+	//   each line prefix-matches a config line at that nesting depth)
+	deviceNamePatterns := []string{}
+	if args.DeviceFilter != "" {
+		deviceNamePatterns = append(deviceNamePatterns, args.DeviceFilter)
+	}
+	parameters := map[string]interface{}{
+		"Operating_Systems":    []string{},
+		"Device_Name_Patterns": deviceNamePatterns,
+		"Config_Pattern":       args.SearchTerm,
+	}
+	for k, v := range args.Parameters {
+		parameters[k] = v
+	}
+
 	queryArgs := RunNQEQueryByIDArgs{
 		NetworkID:  args.NetworkID,
 		SnapshotID: args.SnapshotID,
-		QueryID:    "FQ_e636c47826ad7144f09eaf6bc14dfb0b560e7cc9", // Config Search
-		Parameters: map[string]interface{}{
-			"searchPattern": args.SearchTerm,
-		},
-		Options: args.Options,
+		QueryID:    "FQ_e636c47826ad7144f09eaf6bc14dfb0b560e7cc9", // /Devices/Config Search
+		Parameters: parameters,
+		Options:    args.Options,
 	}
 
 	return s.runNQEQueryByID(queryArgs)

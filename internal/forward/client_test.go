@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/forward-mcp/internal/config"
@@ -156,4 +157,51 @@ func TestClient_GetAvailableModels(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestExtractAPIErrorDetail(t *testing.T) {
+	tests := []struct {
+		name     string
+		body     string
+		expected string
+	}{
+		{
+			name:     "NQE runtime error with nested errors",
+			body:     `{"apiUrl":"/nqe","httpMethod":"POST","message":"Error encountered while executing the NQE query","reason":"NQE_RUNTIME_ERROR","errors":[{"message":"Expected parameter, 'Operating_Systems', was not provided."}],"snapshotId":"1248212","completionType":"FINISHED"}`,
+			expected: "Error encountered while executing the NQE query; Expected parameter, 'Operating_Systems', was not provided. (NQE_RUNTIME_ERROR)",
+		},
+		{
+			name:     "message only",
+			body:     `{"message":"Invalid network ID"}`,
+			expected: "Invalid network ID",
+		},
+		{
+			name:     "non-JSON body",
+			body:     `<html>Bad Request</html>`,
+			expected: "",
+		},
+		{
+			name:     "JSON without recognized fields",
+			body:     `{"status":400}`,
+			expected: "",
+		},
+		{
+			name:     "empty body",
+			body:     ``,
+			expected: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, extractAPIErrorDetail([]byte(tt.body)))
+		})
+	}
+}
+
+func TestExtractAPIErrorDetailTruncation(t *testing.T) {
+	long := strings.Repeat("x", 600)
+	detail := extractAPIErrorDetail([]byte(`{"message":"` + long + `"}`))
+	assert.Len(t, detail, 503) // 500 chars + "..."
+	assert.True(t, strings.HasSuffix(detail, "..."))
 }

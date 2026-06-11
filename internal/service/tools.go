@@ -177,8 +177,8 @@ type GetOSSupportArgs struct {
 type SearchConfigsArgs struct {
 	NetworkID    string                 `json:"network_id,omitempty" jsonschema:"Network ID (use list_networks to find, or set default with set_default_network)"`
 	SnapshotID   string                 `json:"snapshot_id,omitempty" jsonschema:"Snapshot ID (optional, uses latest if not specified)"`
-	SearchTerm   string                 `json:"search_term" jsonschema:"Text pattern to search for in configurations"`
-	DeviceFilter string                 `json:"device_filter,omitempty" jsonschema:"Optional device name pattern to filter results"`
+	SearchTerm   string                 `json:"search_term" jsonschema:"Config block pattern. Each line prefix-matches a config line at its nesting depth; to match a nested line include its parent line and indent the child with a leading space. Example: 'line vty\n transport input telnet' finds telnet-enabled vty lines (searching the nested line alone matches nothing)"`
+	DeviceFilter string                 `json:"device_filter,omitempty" jsonschema:"Optional device name regex to filter results"`
 	Parameters   map[string]interface{} `json:"parameters,omitempty" jsonschema:"Additional query parameters"`
 	Options      *NQEQueryOptions       `json:"options,omitempty" jsonschema:"Query options (limit, offset, etc.)"`
 	AllResults   bool                   `json:"all_results,omitempty" jsonschema:"If true, fetch all config matches using pagination and store in memory system"`

@@ -472,6 +472,49 @@ type LocationBulkPatch struct {
 	Country       string   `json:"country,omitempty"`
 }
 
+// extractAPIErrorDetail pulls the human-readable error detail out of a Forward
+// API error response body, e.g.:
+//
+//	{"message":"Error encountered...","reason":"NQE_RUNTIME_ERROR","errors":[{"message":"Expected parameter, 'X', was not provided."}]}
+//
+// Returns "" if the body is not in the expected shape. The result is bounded in
+// length and contains only the API's own validation messages (no request data).
+func extractAPIErrorDetail(errorBody []byte) string {
+	var apiErr struct {
+		Message string `json:"message"`
+		Reason  string `json:"reason"`
+		Errors  []struct {
+			Message string `json:"message"`
+		} `json:"errors"`
+	}
+	if err := json.Unmarshal(errorBody, &apiErr); err != nil {
+		return ""
+	}
+
+	parts := []string{}
+	if apiErr.Message != "" {
+		parts = append(parts, apiErr.Message)
+	}
+	for _, e := range apiErr.Errors {
+		if e.Message != "" {
+			parts = append(parts, e.Message)
+		}
+	}
+	if len(parts) == 0 {
+		return ""
+	}
+
+	detail := strings.Join(parts, "; ")
+	if apiErr.Reason != "" {
+		detail = fmt.Sprintf("%s (%s)", detail, apiErr.Reason)
+	}
+	const maxDetailLen = 500
+	if len(detail) > maxDetailLen {
+		detail = detail[:maxDetailLen] + "..."
+	}
+	return detail
+}
+
 // Helper method to make authenticated requests
 func (c *Client) makeRequest(method, endpoint string, body interface{}) (*http.Response, error) {
 	var reqBody []byte
@@ -550,6 +593,11 @@ func (c *Client) makeRequest(method, endpoint string, body interface{}) (*http.R
 			debugLogger := logger.New()
 			debugLogger.Debug("400 Bad Request - URL: %s%s, Method: %s, Body Size: %d bytes",
 				c.config.APIBaseURL, endpoint, method, len(reqBody))
+			if readErr == nil {
+				if detail := extractAPIErrorDetail(errorBody); detail != "" {
+					return nil, fmt.Errorf("bad request (HTTP 400): %s", detail)
+				}
+			}
 			return nil, fmt.Errorf("bad request (HTTP 400): the API rejected the request parameters. Please verify all required fields are provided and have valid values")
 		}
 

@@ -47,3 +47,6 @@ claude_desktop_config.json
 
 nqe_queries.db.claude-flow/
 forward-mcp-server
+.claude-flow/
+.clj-kondo/
+.lsp/

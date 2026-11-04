@@ -1,0 +1,221 @@
+{
+  "source": "authored from docs/predict-endpoints.md examples (forward-python-sdk @ 19a97a7d); replace with a live recording via FORWARD_LIVE=1 -record",
+  "exchanges": [
+    {
+      "method": "GET",
+      "path": "/api/networks/115/snapshots",
+      "query": "",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"snapshots\": [{\"id\": \"656\", \"state\": \"PROCESSED\", \"processingTrigger\": \"COLLECTION\", \"createdAt\": \"2026-09-11T09:00:00Z\", \"processedAt\": \"2026-09-11T09:10:00Z\"}]}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/networks/115/change-sets",
+      "query": "",
+      "content_type": "application/json",
+      "request_body": "{\"name\":\"...\",\"snapshotId\":\"656\",\"description\":\"shut Ethernet1\",\"tags\":[\"netorch:agent-a\",\"netorch:run:test\"]}",
+      "status": 200,
+      "body": "{\"id\": \"CHG-101\", \"name\": \"netorch agent-a 2026-11-04 12:00:00\", \"networkId\": \"115\", \"snapshotId\": \"656\", \"tags\": [\"netorch:agent-a\", \"netorch:run:test\"], \"createdAt\": \"2026-09-11T10:00:00Z\", \"createdBy\": \"me@example.com\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/networks/115/change-sets/CHG-101/devices/r1/commands",
+      "query": "action=validate",
+      "content_type": "application/json",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"commandErrors\": [], \"suggestions\": [], \"textMarks\": []}"
+    },
+    {
+      "method": "PUT",
+      "path": "/api/networks/115/change-sets/CHG-101/draft/devices/r1/commands",
+      "query": "",
+      "content_type": "text/plain; charset=utf-8",
+      "request_body": "interface Ethernet1\n shutdown",
+      "status": 204,
+      "body": ""
+    },
+    {
+      "method": "POST",
+      "path": "/api/networks/115/change-sets/CHG-101/commits",
+      "query": "note=contract+test",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"commitId\": \"9d2e1c0c8b3a4f5e6d7c8b9a0f1e2d3c4b5a6978\", \"note\": \"contract test\", \"committedById\": \"11\", \"committedAt\": \"2026-09-11T10:02:00Z\", \"committedBy\": \"me@example.com\"}"
+    },
+    {
+      "method": "POST",
+      "path": "/api/networks/115/change-sets/CHG-101",
+      "query": "action=predict&note=contract+test",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"id\": \"702\", \"note\": \"contract test\", \"createdAt\": \"2026-09-11T10:05:00Z\", \"processingTrigger\": \"PREDICT\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/networks/115/snapshots",
+      "query": "",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"snapshots\": [{\"id\": \"656\", \"state\": \"PROCESSED\", \"processingTrigger\": \"COLLECTION\", \"createdAt\": \"2026-09-11T09:00:00Z\", \"processedAt\": \"2026-09-11T09:10:00Z\"}, {\"id\": \"702\", \"state\": \"PROCESSING\", \"processingTrigger\": \"PREDICT\", \"note\": \"contract test\", \"createdAt\": \"2026-09-11T10:05:00Z\"}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/networks/115/snapshots",
+      "query": "",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"snapshots\": [{\"id\": \"656\", \"state\": \"PROCESSED\", \"processingTrigger\": \"COLLECTION\", \"createdAt\": \"2026-09-11T09:00:00Z\", \"processedAt\": \"2026-09-11T09:10:00Z\"}, {\"id\": \"702\", \"state\": \"PROCESSED\", \"processingTrigger\": \"PREDICT\", \"note\": \"contract test\", \"createdAt\": \"2026-09-11T10:05:00Z\", \"processedAt\": \"2026-09-11T10:09:00Z\"}]}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/subnet-connectivity",
+      "query": "",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"newlyConnectedSubnetPairs\": 0, \"newlyIsolatedSubnetPairs\": 0, \"evaluatedSubnetPairs\": 0, \"totalSubnetPairs\": 39, \"isPartialResult\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/subnet-connectivity",
+      "query": "",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"newlyConnectedSubnetPairs\": 0, \"newlyConnectedImpactedLocations\": 0, \"newlyConnectedDestinationSubnets\": 0, \"newlyIsolatedSubnetPairs\": 14, \"newlyIsolatedImpactedLocations\": 7, \"newlyIsolatedDestinationSubnets\": 1, \"modifiedSubnetPairs\": 0, \"modifiedImpactedLocations\": 0, \"evaluatedSubnetPairs\": 39, \"totalSubnetPairs\": 39, \"totalImpactedLocations\": 7, \"isPartialResult\": false}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/devices",
+      "query": "count",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"count\": 0, \"complete\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/interfaces",
+      "query": "count",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"count\": 1, \"complete\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/topology",
+      "query": "count",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"count\": 0, \"complete\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/l2",
+      "query": "count",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"count\": 0, \"complete\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/acl",
+      "query": "count",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"count\": 0, \"complete\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/nat",
+      "query": "count",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"count\": 0, \"complete\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/arp",
+      "query": "count",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"count\": 0, \"complete\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/mac",
+      "query": "count",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"count\": 0, \"complete\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/files",
+      "query": "count",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"count\": 1, \"complete\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/routing-loop/count",
+      "query": "",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"count\": 0, \"complete\": true}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/checks",
+      "query": "counts",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "{\"Predefined\": {\"count\": 2, \"complete\": true}}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/diffs/656/702/vulnerabilities/counts",
+      "query": "",
+      "content_type": "",
+      "request_body": "",
+      "status": 403,
+      "body": "{\"message\": \"Vulnerability analysis is not licensed\"}"
+    },
+    {
+      "method": "GET",
+      "path": "/api/networks/115/change-sets",
+      "query": "",
+      "content_type": "",
+      "request_body": "",
+      "status": 200,
+      "body": "[{\"id\": \"CHG-101\", \"name\": \"netorch agent-a\", \"networkId\": \"115\", \"snapshotId\": \"656\", \"tags\": [\"netorch:agent-a\", \"netorch:run:old\"], \"description\": \"shut Ethernet1\"}, {\"id\": \"CHG-7\", \"name\": \"someone else's\", \"networkId\": \"115\", \"snapshotId\": \"656\", \"tags\": []}]"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/networks/115/change-sets/CHG-101",
+      "query": "",
+      "content_type": "",
+      "request_body": "",
+      "status": 204,
+      "body": ""
+    }
+  ]
+}

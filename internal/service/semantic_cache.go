@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"github.com/forward-mcp/internal/config"
+	"github.com/forward-mcp/internal/domain/entities"
 	"github.com/forward-mcp/internal/forward"
 	"github.com/forward-mcp/internal/logger"
 )
@@ -30,6 +31,9 @@ type EmbeddingService interface {
 
 // CacheEntry represents a cached query result with embeddings and metadata
 type CacheEntry struct {
+	// Subject is the caller the entry belongs to (entities.LocalSubject for
+	// stdio). Entries persisted by 3.0.0 have no subject and read as local.
+	Subject         string                `json:"subject,omitempty"`
 	Query           string                `json:"query"`
 	NetworkID       string                `json:"network_id"`
 	SnapshotID      string                `json:"snapshot_id"`
@@ -174,10 +178,35 @@ func NewSemanticCache(embeddingService EmbeddingService, logger *logger.Logger, 
 }
 
 // generateCacheKey creates a consistent cache key including instance partitioning using SHA-256
-func (sc *SemanticCache) generateCacheKey(query, networkID, snapshotID string) string {
+func (sc *SemanticCache) generateCacheKey(subject, query, networkID, snapshotID string) string {
 	hasher := sha256.New()
-	hasher.Write([]byte(fmt.Sprintf("%s|%s|%s|%s", sc.instanceID, query, networkID, snapshotID)))
+	hasher.Write([]byte(fmt.Sprintf("%s|%s|%s|%s|%s", sc.instanceID, normalizeSubject(subject), query, networkID, snapshotID)))
 	return hex.EncodeToString(hasher.Sum(nil))
+}
+
+// normalizeSubject maps "" to the local subject so legacy entries and
+// legacy callers share one partition.
+func normalizeSubject(subject string) string {
+	if subject == "" {
+		return entities.LocalSubject
+	}
+	return subject
+}
+
+// Get retrieves a result for the local caller (stdio mode). Remote callers
+// go through GetFor so one identity can never see another's entries.
+func (sc *SemanticCache) Get(query, networkID, snapshotID string) (*forward.NQERunResult, bool) {
+	return sc.GetFor(entities.LocalSubject, query, networkID, snapshotID)
+}
+
+// Put stores a result for the local caller. See GetFor.
+func (sc *SemanticCache) Put(query, networkID, snapshotID string, result *forward.NQERunResult) error {
+	return sc.PutFor(entities.LocalSubject, query, networkID, snapshotID, result)
+}
+
+// FindSimilarQueries searches the local caller's entries. See GetFor.
+func (sc *SemanticCache) FindSimilarQueries(query string, limit int) ([]*CacheEntry, error) {
+	return sc.FindSimilarQueriesFor(entities.LocalSubject, query, limit)
 }
 
 // estimateMemoryUsage estimates the memory usage of a cache entry
@@ -282,7 +311,8 @@ func (sc *SemanticCache) cosineSimilarity(a, b []float64) float64 {
 }
 
 // Get attempts to retrieve a cached result using semantic similarity
-func (sc *SemanticCache) Get(query, networkID, snapshotID string) (*forward.NQERunResult, bool) {
+func (sc *SemanticCache) GetFor(subject, query, networkID, snapshotID string) (*forward.NQERunResult, bool) {
+	subject = normalizeSubject(subject)
 	start := time.Now()
 	defer func() {
 		if sc.metricsEnabled {
@@ -294,7 +324,7 @@ func (sc *SemanticCache) Get(query, networkID, snapshotID string) (*forward.NQER
 	atomic.AddInt64(&sc.metrics.TotalQueries, 1)
 
 	sc.mutex.RLock()
-	key := sc.generateCacheKey(query, networkID, snapshotID)
+	key := sc.generateCacheKey(subject, query, networkID, snapshotID)
 	entry, exists := sc.entries[key]
 	sc.mutex.RUnlock()
 
@@ -327,7 +357,7 @@ func (sc *SemanticCache) Get(query, networkID, snapshotID string) (*forward.NQER
 			sc.logger.Debug("Failed to generate embedding for semantic search: %v", err)
 		} else {
 			// Search for semantically similar queries
-			bestMatch := sc.findBestMatch(embedding, networkID, snapshotID)
+			bestMatch := sc.findBestMatch(embedding, subject, networkID, snapshotID)
 			if bestMatch != nil && bestMatch.SimilarityScore >= sc.similarityThreshold {
 				result, err := sc.getResultFromEntry(bestMatch)
 				if err != nil {
@@ -372,7 +402,8 @@ func (sc *SemanticCache) getResultFromEntry(entry *CacheEntry) (*forward.NQERunR
 }
 
 // Put stores a query result in the cache with its embedding
-func (sc *SemanticCache) Put(query, networkID, snapshotID string, result *forward.NQERunResult) error {
+func (sc *SemanticCache) PutFor(subject, query, networkID, snapshotID string, result *forward.NQERunResult) error {
+	subject = normalizeSubject(subject)
 	sc.mutex.Lock()
 	defer sc.mutex.Unlock()
 
@@ -386,13 +417,14 @@ func (sc *SemanticCache) Put(query, networkID, snapshotID string, result *forwar
 		}
 	}
 
-	key := sc.generateCacheKey(query, networkID, snapshotID)
+	key := sc.generateCacheKey(subject, query, networkID, snapshotID)
 
 	// Estimate uncompressed size
 	resultBytes, _ := json.Marshal(result)
 	uncompressedSize := int64(len(resultBytes))
 
 	entry := &CacheEntry{
+		Subject:          subject,
 		Query:            query,
 		NetworkID:        networkID,
 		SnapshotID:       snapshotID,
@@ -460,13 +492,14 @@ func (sc *SemanticCache) Put(query, networkID, snapshotID string, result *forwar
 }
 
 // findBestMatch finds the most similar cached query
-func (sc *SemanticCache) findBestMatch(embedding []float64, networkID, snapshotID string) *CacheEntry {
+func (sc *SemanticCache) findBestMatch(embedding []float64, subject, networkID, snapshotID string) *CacheEntry {
 	var bestMatch *CacheEntry
 	var bestSimilarity float64
 
 	for _, entry := range sc.embeddingIndex {
-		// Skip expired entries and different networks/snapshots
+		// Skip expired entries, other callers' entries, and different networks/snapshots
 		if sc.isExpired(entry) ||
+			normalizeSubject(entry.Subject) != subject ||
 			(networkID != "" && entry.NetworkID != networkID) ||
 			(snapshotID != "" && entry.SnapshotID != snapshotID) {
 			continue
@@ -728,7 +761,8 @@ func (sc *SemanticCache) GetStats() map[string]interface{} {
 }
 
 // FindSimilarQueries returns similar cached queries for query suggestion
-func (sc *SemanticCache) FindSimilarQueries(query string, limit int) ([]*CacheEntry, error) {
+func (sc *SemanticCache) FindSimilarQueriesFor(subject, query string, limit int) ([]*CacheEntry, error) {
+	subject = normalizeSubject(subject)
 	sc.mutex.RLock()
 	defer sc.mutex.RUnlock()
 
@@ -740,7 +774,7 @@ func (sc *SemanticCache) FindSimilarQueries(query string, limit int) ([]*CacheEn
 	var similarEntries []*CacheEntry
 
 	for _, entry := range sc.embeddingIndex {
-		if sc.isExpired(entry) {
+		if sc.isExpired(entry) || normalizeSubject(entry.Subject) != subject {
 			continue
 		}
 

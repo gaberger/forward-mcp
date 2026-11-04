@@ -50,11 +50,28 @@ tool denied by policy → MCP tool error with the reason.
 Scopes in use: `predict` (required for propose tools). Network ids on a
 caller, when present, restrict which networks it may query (enforced in M1c.5).
 
-## Isolation (M1c.3 — in progress)
+## Isolation
 
-Cache, memory graph and bloom indexes are partitioned by
-`{instance_id}:{subject}:{network_id}` so one caller can never read another's
-results. Tests in `internal/service` prove it.
+Every instance-scoped store is also caller-scoped. The caller's partition id,
+`entities.PartitionID(instanceID, subject)` = `<instance>-<sha256(subject)[:16]>`,
+stands in for the Forward instance id in:
+
+| Store | How it is partitioned |
+|---|---|
+| semantic cache | subject in the entry key; exact hits and similarity scans filter by subject; network and snapshot already in the key |
+| memory graph (SQLite) | every statement filters `instance_id = <partition>`; a per-caller `MemorySystem.ForInstance` view shares the DB handle |
+| API tracker | built on the caller's memory view |
+| bloom filters / persistent indexes | one manager per partition, index dir `data/bloom_indexes/<partition>/` |
+
+Handlers do not know about this: the registrar invokes each tool on a
+caller-scoped view of the service (`forCaller`), so legacy handlers written
+without a context parameter are isolated too. The local caller (stdio) uses
+the original, unpartitioned service, so 3.0.0 data stays readable.
+
+`internal/service/isolation_test.go` proves one identity cannot read, match
+or delete another's cache entries, memory records or bloom filters (run with
+`-race`). Network allow-lists on a caller are enforced at the tool boundary
+(M1c.5).
 
 ## Deployment
 

@@ -115,6 +115,11 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - Remote exposure policy applied at startup: read tools only, propose tools behind `FORWARD_ENABLE_PROPOSE_TOOLS` + `predict` scope, write tools never
   - New env: `FORWARD_REMOTE_AUTH`, `FORWARD_REMOTE_STATIC_TOKENS`, `FORWARD_REMOTE_ALLOW_ANONYMOUS`, `FORWARD_REMOTE_STATELESS`; see `docs/remote-mode.md`
   - Dockerfile rebuilt on Go 1.25 with CGO/SQLite, non-root, remote mode by default; `make serve-http`; GitHub Actions CI (gofmt, build, vet, race tests, govulncheck, docker build)
+- **Per-identity isolation** (netorch M1c.3–1c.4, spec non-negotiable #5)
+  - Semantic cache entries carry the caller subject; keys, exact hits and similarity scans are confined to the caller
+  - Memory graph, API tracker and bloom filters/indexes use the caller's partition id (`<instance>-<sha256(subject)[:16]>`) in place of the instance id; `MemorySystem.ForInstance` views share one SQLite handle
+  - Tool handlers run on a caller-scoped service view (`forCaller`), registered as method expressions, so no handler needed rewriting; stdio keeps the unpartitioned service and its existing data
+  - `isolation_test.go`: cross-identity read/match/delete attempts on cache, memory graph and bloom filters all fail
 - **Predict HTTP contract**: `docs/predict-endpoints.md`, generated from the Forward Python SDK's unpublished OpenAPI by `scripts/gen-predict-endpoints`, with round-trip, wait and verdict semantics (netorch 1b.0)
 - **Instance Lock Protection**: Prevent multiple MCP server instances from running simultaneously
   - File-based locking mechanism using PID validation

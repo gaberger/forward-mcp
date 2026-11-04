@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -585,6 +587,7 @@ func createTestService() *ForwardMCPService {
 		}(),
 		bloomManager:      NewBloomSearchManager(logger, "test"),
 		bloomIndexManager: NewBloomIndexManager(logger, "/tmp"),
+		partitions:        newPartitions(filepath.Join(os.TempDir(), "forward-mcp-test-bloom")),
 		ctx:               ctx,
 		cancelFunc:        cancel,
 	}

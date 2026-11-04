@@ -4,6 +4,7 @@ go 1.26.0
 
 require (
 	github.com/danthegoodman1/bloomsearch v0.0.0-20250717190656-b4b2ee2c8c81
+	github.com/golang-jwt/jwt/v5 v5.3.1
 	github.com/joho/godotenv v1.5.1
 	github.com/mattn/go-sqlite3 v1.14.28
 	github.com/modelcontextprotocol/go-sdk v1.6.1

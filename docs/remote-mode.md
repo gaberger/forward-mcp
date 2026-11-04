@@ -45,7 +45,7 @@ tool denied by policy → MCP tool error with the reason.
 |---|---|---|
 | `static` (default) | `FORWARD_REMOTE_STATIC_TOKENS` = `token=subject[:scope1+scope2[:net1+net2]],…` (tokens ≥ 16 chars) | development, S2 spike, isolation tests |
 | `none` | requires `FORWARD_REMOTE_ALLOW_ANONYMOUS=true`; every caller is `local` | lab only |
-| `jwt` | arrives in M1c.1 (issuer, audience, exp, alg allowlist, JWKS or static key) | production |
+| `jwt` | `FORWARD_JWT_ISSUER` + `FORWARD_JWT_AUDIENCE` (default `forward-mcp`) + one of `FORWARD_JWT_JWKS_URL` (netorch `tokend` or any issuer), `FORWARD_JWT_PUBLIC_KEY_FILE` (PEM), `FORWARD_JWT_HS256_SECRET` (lab). Algorithms RS*/PS*/ES*; HS256 only with the secret option. Claims: `sub`, `iss`, `aud`, `exp` required; `scope` ("predict read") or `scopes`; `network_ids`. | production |
 
 Scopes in use: `predict` (required for propose tools). Network ids on a
 caller, when present, restrict which networks it may touch: a Forward-bound

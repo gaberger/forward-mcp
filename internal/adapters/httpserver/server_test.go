@@ -37,6 +37,12 @@ func (c *captureSink) Info(format string, args ...interface{}) {
 // ("predict_create_change_set") through the remote policy.
 func newTestServer(t *testing.T, propose bool) (*httptest.Server, *captureSink) {
 	t.Helper()
+	return newTestServerWithTokens(t, propose, "agent-token-0123456789=agent-a:predict,plain-token-0123456789=agent-b,scoped-token-0123456789=agent-c:predict:162112")
+}
+
+// newTestServerWithTokens is newTestServer with a custom static token spec.
+func newTestServerWithTokens(t *testing.T, propose bool, tokens string) (*httptest.Server, *captureSink) {
+	t.Helper()
 	catalog := toolpolicy.MustCatalog([]entities.ToolSpec{
 		{Name: "whoami", Class: entities.ToolClassRead, Target: entities.ToolTargetLocal},
 		{Name: "predict_create_change_set", Class: entities.ToolClassPropose, Target: entities.ToolTargetForward},
@@ -69,7 +75,7 @@ func newTestServer(t *testing.T, propose bool) (*httptest.Server, *captureSink) 
 		t.Fatal(err)
 	}
 
-	verifier, err := static.Parse("agent-token-0123456789=agent-a:predict,plain-token-0123456789=agent-b,scoped-token-0123456789=agent-c:predict:162112")
+	verifier, err := static.Parse(tokens)
 	if err != nil {
 		t.Fatal(err)
 	}

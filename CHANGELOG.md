@@ -95,6 +95,11 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
 
 ## [Unreleased]
 
+### Fixed
+- **SemanticCache data races under concurrent callers** (found by the S2 five-identity test under `-race`)
+  - Average response time is now updated lock-free (CAS on float bits) instead of an unsynchronised read-modify-write in `GetFor`
+  - `findBestMatch` takes the read lock while walking the embedding index and returns the similarity instead of writing it onto the shared entry
+  - `GetStats` takes the write lock because it updates the metrics struct
 ### Security
 - **Tool output redaction** (spec non-negotiable #4): every tool result, in remote and stdio mode, now passes through `redact.ConfigRedactor` at the Registrar before it reaches the client and the model. Device-config secrets are replaced with `<redacted:KIND>`: enable/user/line passwords and secrets, SNMP communities and v3 auth/priv keys, TACACS/RADIUS keys, OSPF/BGP/NTP authentication keys, key-strings, IKE and Wi-Fi pre-shared keys, Junos `encrypted-password` and `$9$` values, PAN-OS `<password>`/`<phash>`, crypt hashes and PEM private keys. Works on raw config and on config inside JSON (including Go's `\u003c` escaping) and keeps JSON valid. BGP communities, interfaces and addresses are untouched. Gated by fixtures, a 1,000-case property test and an end-to-end HTTP test.
 
@@ -124,6 +129,7 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - Memory graph, API tracker and bloom filters/indexes use the caller's partition id (`<instance>-<sha256(subject)[:16]>`) in place of the instance id; `MemorySystem.ForInstance` views share one SQLite handle
   - Tool handlers run on a caller-scoped service view (`forCaller`), registered as method expressions, so no handler needed rewriting; stdio keeps the unpartitioned service and its existing data
   - `isolation_test.go`: cross-identity read/match/delete attempts on cache, memory graph and bloom filters all fail
+- **JWT identity verifier** (netorch M1c.1): `FORWARD_REMOTE_AUTH=jwt` verifies RS/PS/ES-signed bearer tokens (HS256 only with an explicit lab secret) for issuer, audience and expiry via `golang-jwt/jwt/v5`; keys from a JWKS URL (cached, rotation-aware), a PEM file, or a secret. Claims `sub`, `scope`/`scopes`, `network_ids` map to the caller. New top-level dependency: `github.com/golang-jwt/jwt/v5`
 - **Network allow-list, rate limit, log redaction** (netorch M1c.5–1c.7)
   - A caller with network ids is denied Forward-bound tools for other networks and must name a network explicitly
   - Per-subject token-bucket rate limit (`FORWARD_REMOTE_RATE_LIMIT_PER_MIN`, `_BURST`)

@@ -36,6 +36,12 @@ type RemoteConfig struct {
 	// Stateless disables MCP session tracking (for load balancers without
 	// sticky sessions).
 	Stateless bool `json:"stateless" env:"FORWARD_REMOTE_STATELESS"`
+	// JWT settings for Auth=jwt.
+	JWTIssuer        string `json:"jwtIssuer" env:"FORWARD_JWT_ISSUER"`
+	JWTAudience      string `json:"jwtAudience" env:"FORWARD_JWT_AUDIENCE"`
+	JWTJWKSURL       string `json:"jwtJwksUrl" env:"FORWARD_JWT_JWKS_URL"`
+	JWTPublicKeyFile string `json:"jwtPublicKeyFile" env:"FORWARD_JWT_PUBLIC_KEY_FILE"`
+	JWTHS256Secret   string `json:"-" env:"FORWARD_JWT_HS256_SECRET"` // lab only
 	// RateLimitPerMinute bounds tool calls per caller subject (0 = off).
 	RateLimitPerMinute int `json:"rateLimitPerMinute" env:"FORWARD_REMOTE_RATE_LIMIT_PER_MIN"`
 	// RateLimitBurst is the burst allowance per subject (default = per-minute).
@@ -152,6 +158,11 @@ func LoadConfig() *Config {
 			StaticTokens:       getEnv("FORWARD_REMOTE_STATIC_TOKENS", ""),
 			AllowAnonymous:     getEnvAsBool("FORWARD_REMOTE_ALLOW_ANONYMOUS", false),
 			Stateless:          getEnvAsBool("FORWARD_REMOTE_STATELESS", false),
+			JWTIssuer:          getEnv("FORWARD_JWT_ISSUER", ""),
+			JWTAudience:        getEnv("FORWARD_JWT_AUDIENCE", "forward-mcp"),
+			JWTJWKSURL:         getEnv("FORWARD_JWT_JWKS_URL", ""),
+			JWTPublicKeyFile:   getEnv("FORWARD_JWT_PUBLIC_KEY_FILE", ""),
+			JWTHS256Secret:     getEnv("FORWARD_JWT_HS256_SECRET", ""),
 			RateLimitPerMinute: getEnvAsInt("FORWARD_REMOTE_RATE_LIMIT_PER_MIN", 600),
 			RateLimitBurst:     getEnvAsInt("FORWARD_REMOTE_RATE_LIMIT_BURST", 60),
 		},

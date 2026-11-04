@@ -11,6 +11,8 @@ import (
 
 	"github.com/forward-mcp/internal/adapters/auditlog"
 	"github.com/forward-mcp/internal/adapters/httpserver"
+	"github.com/forward-mcp/internal/adapters/identity/jwks"
+	jwtverifier "github.com/forward-mcp/internal/adapters/identity/jwt"
 	"github.com/forward-mcp/internal/adapters/identity/static"
 	mcpadapter "github.com/forward-mcp/internal/adapters/mcp"
 	"github.com/forward-mcp/internal/config"
@@ -250,7 +252,8 @@ func runServeHTTP(args []string) {
 	addr := flags.String("addr", "", "listen address (default SERVER_HOST:SERVER_PORT, 0.0.0.0:8080)")
 	flags.Usage = func() {
 		fmt.Fprintf(flags.Output(), "Usage: %s serve-http [flags]\n\nServes MCP over Streamable HTTP at /mcp with bearer authentication.\n"+
-			"Identity: FORWARD_REMOTE_AUTH=static with FORWARD_REMOTE_STATIC_TOKENS=\"token=subject[:scopes[:networks]],...\" (dev only),\n"+
+			"Identity: FORWARD_REMOTE_AUTH=jwt with FORWARD_JWT_ISSUER, FORWARD_JWT_AUDIENCE and FORWARD_JWT_JWKS_URL or FORWARD_JWT_PUBLIC_KEY_FILE (production),\n"+
+			"FORWARD_REMOTE_AUTH=static with FORWARD_REMOTE_STATIC_TOKENS=\"token=subject[:scopes[:networks]],...\" (dev only),\n"+
 			"or FORWARD_REMOTE_AUTH=none with FORWARD_REMOTE_ALLOW_ANONYMOUS=true (lab only).\n"+
 			"Propose tools: FORWARD_ENABLE_PROPOSE_TOOLS=true (callers also need the \"predict\" scope).\n\nFlags:\n", os.Args[0])
 		flags.PrintDefaults()
@@ -274,13 +277,20 @@ func runServeHTTP(args []string) {
 		}
 		verifier = v
 		log.Warn("serve-http: using the STATIC token verifier (development only); subjects: %v", v.Subjects())
+	case "jwt":
+		v, err := buildJWTVerifier(cfg.Remote)
+		if err != nil {
+			log.Fatalf("serve-http: %v", err)
+		}
+		verifier = v
+		log.Info("serve-http: JWT verifier: issuer=%s audience=%s jwks=%s", cfg.Remote.JWTIssuer, cfg.Remote.JWTAudience, cfg.Remote.JWTJWKSURL)
 	case "none":
 		if !cfg.Remote.AllowAnonymous {
 			log.Fatalf("serve-http: FORWARD_REMOTE_AUTH=none requires FORWARD_REMOTE_ALLOW_ANONYMOUS=true")
 		}
 		log.Warn("serve-http: ANONYMOUS access enabled; every caller is %q (lab only)", entities.LocalSubject)
 	default:
-		log.Fatalf("serve-http: unsupported FORWARD_REMOTE_AUTH=%q (static|none; jwt arrives in M1c.1)", cfg.Remote.Auth)
+		log.Fatalf("serve-http: unsupported FORWARD_REMOTE_AUTH=%q (jwt|static|none)", cfg.Remote.Auth)
 	}
 
 	log.Info("Forward MCP remote server starting on %s (API: %s)", *addr, cfg.Forward.APIBaseURL)
@@ -340,4 +350,37 @@ func runServeHTTP(args []string) {
 	if runErr != nil {
 		os.Exit(1)
 	}
+}
+
+// buildJWTVerifier wires the key source from config: JWKS URL (tokend or
+// any issuer), a static PEM public key, or an HS256 secret for the lab.
+func buildJWTVerifier(rc config.RemoteConfig) (ports.IdentityVerifier, error) {
+	if rc.JWTIssuer == "" {
+		return nil, fmt.Errorf("FORWARD_JWT_ISSUER is required for FORWARD_REMOTE_AUTH=jwt")
+	}
+	var keys jwks.KeySource
+	allowHS := false
+	switch {
+	case rc.JWTJWKSURL != "":
+		keys = jwks.NewRemote(rc.JWTJWKSURL)
+	case rc.JWTPublicKeyFile != "":
+		b, err := os.ReadFile(rc.JWTPublicKeyFile)
+		if err != nil {
+			return nil, fmt.Errorf("FORWARD_JWT_PUBLIC_KEY_FILE: %w", err)
+		}
+		pub, err := jwks.ParsePEMPublicKey(b)
+		if err != nil {
+			return nil, fmt.Errorf("FORWARD_JWT_PUBLIC_KEY_FILE: %w", err)
+		}
+		keys = jwks.Static{Public: pub}
+	case rc.JWTHS256Secret != "":
+		if len(rc.JWTHS256Secret) < 32 {
+			return nil, fmt.Errorf("FORWARD_JWT_HS256_SECRET must be at least 32 bytes")
+		}
+		keys = jwks.Static{Secret: []byte(rc.JWTHS256Secret)}
+		allowHS = true
+	default:
+		return nil, fmt.Errorf("set FORWARD_JWT_JWKS_URL, FORWARD_JWT_PUBLIC_KEY_FILE or FORWARD_JWT_HS256_SECRET")
+	}
+	return jwtverifier.New(jwtverifier.Options{Issuer: rc.JWTIssuer, Audience: rc.JWTAudience, Keys: keys, AllowHS256: allowHS})
 }

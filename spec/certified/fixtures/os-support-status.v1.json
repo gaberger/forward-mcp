@@ -1,0 +1,7 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {"name": "router-1", "vendor": "CISCO", "osVersion": "15.9(3)M4", "supportStatus": "SUPPORTED", "endOfSupport": "2027-10-31"},
+    {"name": "switch-1", "vendor": "ARISTA", "osVersion": "4.28.3M", "supportStatus": "END_OF_SUPPORT", "endOfSupport": "2025-06-30"}
+  ]
+}

@@ -1,0 +1,7 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {"device": "router-1", "vrf": "default", "neighborAddress": "192.0.2.2", "remoteAs": 65002, "state": "IDLE"},
+    {"device": "router-1", "vrf": "default", "neighborAddress": "192.0.2.6", "remoteAs": 65003, "state": "ACTIVE"}
+  ]
+}

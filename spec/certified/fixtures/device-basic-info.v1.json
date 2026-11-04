@@ -1,0 +1,8 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {"name": "router-1", "vendor": "CISCO", "platform": "IOS", "osVersion": "15.9(3)M4", "model": "ISR4451", "managementIp": "10.0.0.1"},
+    {"name": "switch-1", "vendor": "ARISTA", "platform": "EOS", "osVersion": "4.28.3M", "model": "DCS-7050SX3", "managementIp": "10.0.0.2"},
+    {"name": "fw-1", "vendor": "PALO_ALTO", "platform": "PAN_OS", "osVersion": "10.2.4", "model": "PA-3220", "managementIp": null}
+  ]
+}

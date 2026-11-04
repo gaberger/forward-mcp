@@ -1,0 +1,36 @@
+{
+  "id": "bgp-peerings-not-established",
+  "version": 1,
+  "title": "BGP peerings not established",
+  "intent": "Every configured BGP neighbor whose session is not in the Established state, with the local device, VRF, neighbor address, remote AS and current state.",
+  "synonyms": [
+    "bgp neighbors down",
+    "bgp sessions not up",
+    "which bgp peers are down",
+    "bgp adjacency failed",
+    "bgp idle or active neighbors"
+  ],
+  "parameters": [
+    {
+      "name": "device",
+      "type": "device",
+      "required": false,
+      "description": "Restrict to one device name; omit for the whole network."
+    }
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": ["device", "neighborAddress", "state"],
+    "properties": {
+      "device": {"type": "string"},
+      "vrf": {"type": "string"},
+      "neighborAddress": {"type": "string"},
+      "remoteAs": {"type": ["integer", "string"]},
+      "state": {"type": "string"}
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": true,
+  "source": {"nqe_query_id": "FQ_34f8d29d3c32a7a183d38cf22dc9eea7ea645bea", "repository": "fwd"},
+  "fixture": "bgp-peerings-not-established.v1.json"
+}

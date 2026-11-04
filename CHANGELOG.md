@@ -102,6 +102,12 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - Propose-class calls require the caller to hold the `predict` scope and are audit-logged as `AUDIT {...}` JSON lines with identifiers only (secrets redacted)
   - Tool registration now goes through `internal/adapters/mcp.Registrar`; `ForwardMCPService.RegisterToolsWith` accepts any registrar, `RegisterTools` keeps the stdio behaviour
   - New hex-architecture packages per ADR-001: `domain/entities` (ToolClass, Caller, AuditEvent), `ports` (ToolRegistry, ToolPolicy, AuditLogger, IdentityVerifier), `usecases` (ToolExposure), `adapters/mcp`, `adapters/auditlog`
+- **Certified NQE library, schema and loader** (netorch M1a.1)
+  - `spec/certified/`: versioned library (`VERSION`, `queries/<id>.json`, `fixtures/`) with three seed entries
+  - `domain/entities.CertifiedQuery` / `Evidence`; `domain/services/certified` validation rules (every problem reported with file and field; `certified:true` requires owner, fixture and output schema)
+  - `adapters/certifiedfs` loads any `fs.FS`; golden test proves the checked-in library always loads
+  - Search, answerability and run tools follow in M1a.3–1a.5
+- **Predict HTTP contract**: `docs/predict-endpoints.md`, generated from the Forward Python SDK's unpublished OpenAPI by `scripts/gen-predict-endpoints`, with round-trip, wait and verdict semantics (netorch 1b.0)
 - **Instance Lock Protection**: Prevent multiple MCP server instances from running simultaneously
   - File-based locking mechanism using PID validation
   - Automatic stale lock detection and cleanup

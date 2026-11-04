@@ -1,0 +1,29 @@
+{
+  "id": "os-support-status",
+  "version": 1,
+  "title": "OS support status",
+  "intent": "For each device, whether its operating system version is still supported by the vendor, with end-of-support dates.",
+  "synonyms": [
+    "end of life os",
+    "unsupported os versions",
+    "os eol",
+    "which devices run unsupported software",
+    "os end of support dates"
+  ],
+  "parameters": [],
+  "output_schema": {
+    "type": "object",
+    "required": ["name", "osVersion"],
+    "properties": {
+      "name": {"type": "string"},
+      "vendor": {"type": "string"},
+      "osVersion": {"type": "string"},
+      "supportStatus": {"type": "string"},
+      "endOfSupport": {"type": ["string", "null"]}
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {"nqe_query_id": "FQ_fc33d9fd70ba19a18455b0e4d26ca8420003d9cc", "repository": "fwd"},
+  "fixture": "os-support-status.v1.json"
+}

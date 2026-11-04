@@ -1,0 +1,61 @@
+{
+  "id": "interface-status",
+  "version": 1,
+  "title": "Interface status",
+  "intent": "Admin and operational state of every interface, with speed and description, so down or admin-shut links can be found.",
+  "synonyms": [
+    "interfaces down",
+    "which interfaces are down",
+    "link down",
+    "interface admin shut",
+    "port status",
+    "operational state of interfaces"
+  ],
+  "parameters": [
+    {
+      "name": "device",
+      "type": "device",
+      "required": false,
+      "description": "Restrict to one device name; omit for the whole network."
+    }
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "device",
+      "interface",
+      "adminStatus",
+      "operStatus"
+    ],
+    "properties": {
+      "device": {
+        "type": "string"
+      },
+      "interface": {
+        "type": "string"
+      },
+      "adminStatus": {
+        "type": "string"
+      },
+      "operStatus": {
+        "type": "string"
+      },
+      "speed": {
+        "type": [
+          "integer",
+          "string"
+        ]
+      },
+      "description": {
+        "type": "string"
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_6ac3682c92a74b778d98584aea8afa5fe40f2150",
+    "repository": "fwd"
+  },
+  "fixture": "interface-status.v1.json"
+}

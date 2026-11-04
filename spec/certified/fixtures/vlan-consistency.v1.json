@@ -1,0 +1,13 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "deviceA": "dist-1",
+      "interfaceA": "Po1",
+      "vlansA": "10,20,30",
+      "deviceB": "access-1",
+      "interfaceB": "Po1",
+      "vlansB": "10,20"
+    }
+  ]
+}

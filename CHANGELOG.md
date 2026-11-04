@@ -107,6 +107,7 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - New hex-architecture packages per ADR-001: `domain/entities` (ToolClass, Caller, AuditEvent), `ports` (ToolRegistry, ToolPolicy, AuditLogger, IdentityVerifier), `usecases` (ToolExposure), `adapters/mcp`, `adapters/auditlog`
 - **Certified NQE library, schema and loader** (netorch M1a.1)
   - `spec/certified/`: versioned library (`VERSION`, `queries/<id>.json`, `fixtures/`) with three seed entries
+  - Library 0.2.0: 14 further entries drawn from the Forward NQE library (interface status/errors, MTU/speed/VLAN consistency, CDP/LLDP neighbors and discovery gaps, hardware inventory and support status, CVE exposure, VTY non-SSH access, VRF route leaking, duplicate IPs, config diff). Shipped `certified: false` until their output columns are reviewed against a live instance; results carry `certified:false` meanwhile
   - `domain/entities.CertifiedQuery` / `Evidence`; `domain/services/certified` validation rules (every problem reported with file and field; `certified:true` requires owner, fixture and output schema)
   - `adapters/certifiedfs` loads any `fs.FS`; golden test proves the checked-in library always loads
   - Tools `search_certified_queries`, `check_answerable`, `run_certified_query` (read class) backed by `usecases.CertifiedQueries`; ranking reuses the configured embedding provider plus verbatim synonym boosts; parameters validated against the entry; output shape drift reported as warnings (M1a.3–1a.5)

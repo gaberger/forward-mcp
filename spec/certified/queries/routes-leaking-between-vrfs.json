@@ -1,0 +1,49 @@
+{
+  "id": "routes-leaking-between-vrfs",
+  "version": 1,
+  "title": "Routes leaking between VRFs",
+  "intent": "Prefixes present in more than one VRF through route leaking, which may break tenant isolation.",
+  "synonyms": [
+    "vrf route leak",
+    "routes shared between vrfs",
+    "vrf isolation broken",
+    "prefix in multiple vrfs",
+    "inter-vrf leaking"
+  ],
+  "parameters": [
+    {
+      "name": "device",
+      "type": "device",
+      "required": false,
+      "description": "Restrict to one device name; omit for the whole network."
+    }
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "device",
+      "prefix"
+    ],
+    "properties": {
+      "device": {
+        "type": "string"
+      },
+      "prefix": {
+        "type": "string"
+      },
+      "sourceVrf": {
+        "type": "string"
+      },
+      "targetVrf": {
+        "type": "string"
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_00ee6781658a7715b3d8664b83f739ba5bad4c6e",
+    "repository": "fwd"
+  },
+  "fixture": "routes-leaking-between-vrfs.v1.json"
+}

@@ -1,0 +1,13 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "deviceA": "spine-1",
+      "interfaceA": "Ethernet1",
+      "mtuA": 9214,
+      "deviceB": "leaf-1",
+      "interfaceB": "Ethernet49",
+      "mtuB": 1500
+    }
+  ]
+}

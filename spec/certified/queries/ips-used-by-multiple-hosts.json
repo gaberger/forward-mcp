@@ -1,0 +1,41 @@
+{
+  "id": "ips-used-by-multiple-hosts",
+  "version": 1,
+  "title": "IP addresses used by multiple hosts",
+  "intent": "IP addresses seen behind more than one host MAC, indicating duplicate IPs or misconfigured hosts.",
+  "synonyms": [
+    "duplicate ip",
+    "ip conflict",
+    "same ip two macs",
+    "duplicate address",
+    "ip used twice"
+  ],
+  "parameters": [],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "ip"
+    ],
+    "properties": {
+      "ip": {
+        "type": "string"
+      },
+      "macs": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "count": {
+        "type": "integer"
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_b25bd805286f24168220122938241a45cd05caa9",
+    "repository": "fwd"
+  },
+  "fixture": "ips-used-by-multiple-hosts.v1.json"
+}

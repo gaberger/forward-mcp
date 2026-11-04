@@ -40,8 +40,8 @@ func main() {
 
 	// Load config to verify setup
 	cfg := config.LoadConfig()
-	if cfg.Forward.APIKey == "" {
-		fmt.Println("❌ No API key found. Make sure your .env file is configured.")
+	if err := cfg.Forward.ValidateAuth(); err != nil {
+		fmt.Printf("❌ %v. Make sure your .env file is configured.\n", err)
 		return
 	}
 

@@ -2,11 +2,19 @@ package httpserver
 
 import (
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
+	"github.com/forward-mcp/internal/adapters/identity/basic"
+	"github.com/forward-mcp/internal/adapters/identity/jwks"
+	jwtverifier "github.com/forward-mcp/internal/adapters/identity/jwt"
+	"github.com/forward-mcp/internal/adapters/identity/multi"
+	gojwt "github.com/golang-jwt/jwt/v5"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -233,4 +241,71 @@ func TestRateLimitPerSubject(t *testing.T) {
 	if res, err := a.CallTool(context.Background(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}}); err != nil || res.IsError {
 		t.Fatalf("other subject must not be limited: %v %+v", err, res)
 	}
+}
+
+// All three caller auth schemes against one remote server: an opaque token
+// (Bearer), an API key/secret (HTTP Basic) and a JWT, each mapped to its
+// own caller identity.
+func TestBasicTokenAndJWTCallersAreAllAccepted(t *testing.T) {
+	catalog := toolpolicy.MustCatalog([]entities.ToolSpec{{Name: "whoami", Class: entities.ToolClassRead, Target: entities.ToolTargetLocal}})
+	srv := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
+	r := mcpadapter.NewRegistrar(srv, &usecases.ToolExposure{Registry: catalog, Policy: toolpolicy.Remote(false)}, auditlog.New(&captureSink{}))
+	mcpadapter.AddTool(r, "whoami", "who am I", func(ctx context.Context, _ whoArgs) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: ports.CallerFromContext(ctx).Subject}}}, nil
+	})
+	tokens, _ := static.Parse("opaque-token-0123456789=token-caller")
+	sum := sha256.Sum256([]byte("api-secret-value"))
+	basicV, err := basic.New([]basic.Credential{{Key: "fwd-key-01", SecretSHA256: hex.EncodeToString(sum[:]), Subject: "basic-caller"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	hsKey := []byte("0123456789abcdef0123456789abcdef")
+	jwtV, err := jwtverifier.New(jwtverifier.Options{Issuer: "https://tokend.test", Audience: "forward-mcp", Keys: jwks.Static{Secret: hsKey}, AllowHS256: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	v, _ := multi.New(multi.Options{JWT: jwtV, Token: tokens, Basic: basicV})
+	s, err := New(srv, Options{Addr: "127.0.0.1:0", Verifier: v})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ts := httptest.NewServer(s.Handler())
+	defer ts.Close()
+
+	jwtTok := gojwt.NewWithClaims(gojwt.SigningMethodHS256, gojwt.MapClaims{"iss": "https://tokend.test", "aud": "forward-mcp", "sub": "jwt-caller", "exp": time.Now().Add(time.Hour).Unix()})
+	signed, _ := jwtTok.SignedString(hsKey)
+
+	call := func(rt http.RoundTripper) (string, error) {
+		client := mcp.NewClient(&mcp.Implementation{Name: "c", Version: "0"}, nil)
+		sess, err := client.Connect(context.Background(), &mcp.StreamableClientTransport{Endpoint: ts.URL + "/mcp", HTTPClient: &http.Client{Transport: rt}}, nil)
+		if err != nil {
+			return "", err
+		}
+		defer sess.Close()
+		res, err := sess.CallTool(context.Background(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}})
+		if err != nil {
+			return "", err
+		}
+		return res.Content[0].(*mcp.TextContent).Text, nil
+	}
+	if got, err := call(bearerTransport{token: "opaque-token-0123456789", base: http.DefaultTransport}); err != nil || got != "token-caller" {
+		t.Errorf("token: %q %v", got, err)
+	}
+	if got, err := call(basicTransport{key: "fwd-key-01", secret: "api-secret-value"}); err != nil || got != "basic-caller" {
+		t.Errorf("basic: %q %v", got, err)
+	}
+	if got, err := call(bearerTransport{token: signed, base: http.DefaultTransport}); err != nil || got != "jwt-caller" {
+		t.Errorf("jwt: %q %v", got, err)
+	}
+	if _, err := call(basicTransport{key: "fwd-key-01", secret: "wrong"}); err == nil {
+		t.Error("wrong basic secret must be refused")
+	}
+}
+
+type basicTransport struct{ key, secret string }
+
+func (b basicTransport) RoundTrip(req *http.Request) (*http.Response, error) {
+	req = req.Clone(req.Context())
+	req.SetBasicAuth(b.key, b.secret)
+	return http.DefaultTransport.RoundTrip(req)
 }

@@ -6,13 +6,16 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/forward-mcp/internal/adapters/auditlog"
 	"github.com/forward-mcp/internal/adapters/httpserver"
+	"github.com/forward-mcp/internal/adapters/identity/basic"
 	"github.com/forward-mcp/internal/adapters/identity/jwks"
 	jwtverifier "github.com/forward-mcp/internal/adapters/identity/jwt"
+	"github.com/forward-mcp/internal/adapters/identity/multi"
 	"github.com/forward-mcp/internal/adapters/identity/static"
 	mcpadapter "github.com/forward-mcp/internal/adapters/mcp"
 	"github.com/forward-mcp/internal/config"
@@ -99,10 +102,10 @@ func main() {
 
 	// Log essential environment configuration at INFO level
 	logger.Info("Environment initialized - API: %s", cfg.Forward.APIBaseURL)
-	if cfg.Forward.APIKey != "" {
-		logger.Info("Environment initialized - API credentials: configured")
+	if err := cfg.Forward.ValidateAuth(); err == nil {
+		logger.Info("Environment initialized - API credentials: configured (%s)", cfg.Forward.EffectiveAuthType())
 	} else {
-		logger.Info("Environment initialized - API credentials: missing")
+		logger.Info("Environment initialized - API credentials: %v", err)
 	}
 
 	if cfg.Forward.DefaultNetworkID != "" {
@@ -251,8 +254,10 @@ func runServeHTTP(args []string) {
 	addr := flags.String("addr", "", "listen address (default SERVER_HOST:SERVER_PORT, 0.0.0.0:8080)")
 	flags.Usage = func() {
 		fmt.Fprintf(flags.Output(), "Usage: %s serve-http [flags]\n\nServes MCP over Streamable HTTP at /mcp with bearer authentication.\n"+
-			"Identity: FORWARD_REMOTE_AUTH=jwt with FORWARD_JWT_ISSUER, FORWARD_JWT_AUDIENCE and FORWARD_JWT_JWKS_URL or FORWARD_JWT_PUBLIC_KEY_FILE (production),\n"+
-			"FORWARD_REMOTE_AUTH=static with FORWARD_REMOTE_STATIC_TOKENS=\"token=subject[:scopes[:networks]],...\" (dev only),\n"+
+			"Identity: FORWARD_REMOTE_AUTH is a comma list of jwt, token, basic:\n"+
+			"  jwt   FORWARD_JWT_ISSUER, FORWARD_JWT_AUDIENCE and FORWARD_JWT_JWKS_URL or FORWARD_JWT_PUBLIC_KEY_FILE\n"+
+			"  token FORWARD_REMOTE_STATIC_TOKENS=\"token=subject[:scopes[:networks]],...\" (alias: static)\n"+
+			"  basic FORWARD_REMOTE_BASIC_CREDENTIALS_FILE (API key + SHA-256 of secret per subject)\n"+
 			"or FORWARD_REMOTE_AUTH=none with FORWARD_REMOTE_ALLOW_ANONYMOUS=true (lab only).\n"+
 			"Propose tools: FORWARD_ENABLE_PROPOSE_TOOLS=true (callers also need the \"predict\" scope).\n\nFlags:\n", os.Args[0])
 		flags.PrintDefaults()
@@ -267,30 +272,14 @@ func runServeHTTP(args []string) {
 		*addr = fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	}
 
-	var verifier ports.IdentityVerifier
-	switch cfg.Remote.Auth {
-	case "static":
-		v, err := static.Parse(cfg.Remote.StaticTokens)
-		if err != nil {
-			log.Fatalf("serve-http: %v", err)
-		}
-		verifier = v
-		log.Warn("serve-http: using the STATIC token verifier (development only); subjects: %v", v.Subjects())
-	case "jwt":
-		v, err := buildJWTVerifier(cfg.Remote)
-		if err != nil {
-			log.Fatalf("serve-http: %v", err)
-		}
-		verifier = v
-		log.Info("serve-http: JWT verifier: issuer=%s audience=%s jwks=%s", cfg.Remote.JWTIssuer, cfg.Remote.JWTAudience, cfg.Remote.JWTJWKSURL)
-	case "none":
-		if !cfg.Remote.AllowAnonymous {
-			log.Fatalf("serve-http: FORWARD_REMOTE_AUTH=none requires FORWARD_REMOTE_ALLOW_ANONYMOUS=true")
-		}
-		log.Warn("serve-http: ANONYMOUS access enabled; every caller is %q (lab only)", entities.LocalSubject)
-	default:
-		log.Fatalf("serve-http: unsupported FORWARD_REMOTE_AUTH=%q (jwt|static|none)", cfg.Remote.Auth)
+	verifier, err := buildVerifier(cfg.Remote, log)
+	if err != nil {
+		log.Fatalf("serve-http: %v", err)
 	}
+	if err := cfg.Forward.ValidateAuth(); err != nil {
+		log.Fatalf("serve-http: %v", err)
+	}
+	log.Info("serve-http: Forward API auth type %s", cfg.Forward.EffectiveAuthType())
 
 	log.Info("Forward MCP remote server starting on %s (API: %s)", *addr, cfg.Forward.APIBaseURL)
 	forwardService := service.NewForwardMCPService(cfg, log)
@@ -352,6 +341,64 @@ func runServeHTTP(args []string) {
 
 // buildJWTVerifier wires the key source from config: JWKS URL (tokend or
 // any issuer), a static PEM public key, or an HS256 secret for the lab.
+// buildVerifier turns FORWARD_REMOTE_AUTH into a verifier. It is a comma
+// list of jwt, token (alias: static), basic, or the single value none
+// (FORWARD_REMOTE_ALLOW_ANONYMOUS=true, lab only). Each credential is routed
+// to the verifier for its shape (see identity/multi).
+func buildVerifier(rc config.RemoteConfig, log *logger.Logger) (ports.IdentityVerifier, error) {
+	modes := map[string]bool{}
+	for _, m := range strings.Split(strings.ToLower(rc.Auth), ",") {
+		if m = strings.TrimSpace(m); m == "static" {
+			m = "token"
+		}
+		if m != "" {
+			modes[m] = true
+		}
+	}
+	if modes["none"] {
+		if len(modes) > 1 {
+			return nil, fmt.Errorf("FORWARD_REMOTE_AUTH=none cannot be combined with other schemes")
+		}
+		if !rc.AllowAnonymous {
+			return nil, fmt.Errorf("FORWARD_REMOTE_AUTH=none requires FORWARD_REMOTE_ALLOW_ANONYMOUS=true")
+		}
+		log.Warn("serve-http: ANONYMOUS access enabled; every caller is %q (lab only)", entities.LocalSubject)
+		return nil, nil
+	}
+	var o multi.Options
+	for m := range modes {
+		switch m {
+		case "jwt":
+			v, err := buildJWTVerifier(rc)
+			if err != nil {
+				return nil, err
+			}
+			o.JWT = v
+			log.Info("serve-http: auth jwt: issuer=%s audience=%s jwks=%s", rc.JWTIssuer, rc.JWTAudience, rc.JWTJWKSURL)
+		case "token":
+			v, err := static.Parse(rc.StaticTokens)
+			if err != nil {
+				return nil, err
+			}
+			o.Token = v
+			log.Warn("serve-http: auth token: static bearer tokens (FORWARD_REMOTE_STATIC_TOKENS); subjects %v", v.Subjects())
+		case "basic":
+			if rc.BasicCredentialsFile == "" {
+				return nil, fmt.Errorf("FORWARD_REMOTE_AUTH includes basic: set FORWARD_REMOTE_BASIC_CREDENTIALS_FILE")
+			}
+			v, err := basic.Load(rc.BasicCredentialsFile)
+			if err != nil {
+				return nil, err
+			}
+			o.Basic = v
+			log.Info("serve-http: auth basic: API key/secret; subjects %v", v.Subjects())
+		default:
+			return nil, fmt.Errorf("unsupported FORWARD_REMOTE_AUTH scheme %q (jwt|token|basic, or none)", m)
+		}
+	}
+	return multi.New(o)
+}
+
 func buildJWTVerifier(rc config.RemoteConfig) (ports.IdentityVerifier, error) {
 	if rc.JWTIssuer == "" {
 		return nil, fmt.Errorf("FORWARD_JWT_ISSUER is required for FORWARD_REMOTE_AUTH=jwt")

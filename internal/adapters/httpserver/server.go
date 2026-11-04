@@ -73,7 +73,7 @@ func New(mcpServer *mcp.Server, opts Options) (*Server, error) {
 
 	var mcpHandler http.Handler = handler
 	if opts.Verifier != nil {
-		mcpHandler = auth.RequireBearerToken(mcpadapter.TokenVerifier(opts.Verifier, tokenTTL), nil)(handler)
+		mcpHandler = basicAsBearer(auth.RequireBearerToken(mcpadapter.TokenVerifier(opts.Verifier, tokenTTL), nil)(handler))
 	}
 
 	mux := http.NewServeMux()
@@ -125,3 +125,18 @@ func (s *Server) Serve(ctx context.Context, ln net.Listener) error {
 
 // Addr returns the configured address.
 func (s *Server) Addr() string { return s.opts.Addr }
+
+// basicAsBearer lets API key/secret callers use HTTP Basic. The SDK's
+// middleware only understands Bearer, so a valid "Basic base64(key:secret)"
+// header is rewritten to the ports.BasicBearer form and verified by the
+// same chain as JWTs and tokens (the multi verifier routes it to the basic
+// verifier). Malformed Basic headers are left alone and get a 401.
+func basicAsBearer(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if key, secret, ok := r.BasicAuth(); ok && key != "" {
+			r = r.Clone(r.Context())
+			r.Header.Set("Authorization", "Bearer "+ports.BasicBearer(key, secret))
+		}
+		next.ServeHTTP(w, r)
+	})
+}

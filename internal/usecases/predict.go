@@ -308,6 +308,55 @@ func (p *PredictChanges) GetResults(ctx context.Context, caller entities.Caller,
 	return r, nil
 }
 
+// FindByDescription returns the caller-visible change sets on a network
+// whose description contains needle, newest first, and adopts them into
+// this process's ownership for the caller (so a workflow that crashed
+// after creating a change set can resume with it instead of creating a
+// second one). Only change sets tagged for this caller are returned.
+func (p *PredictChanges) FindByDescription(ctx context.Context, caller entities.Caller, networkID, needle string) ([]entities.ChangeSet, error) {
+	if strings.TrimSpace(needle) == "" {
+		return nil, fmt.Errorf("description text to search for is required")
+	}
+	list, err := p.client.ListChangeSets(ctx, networkID)
+	if err != nil {
+		return nil, err
+	}
+	var out []entities.ChangeSet
+	for _, cs := range list {
+		if !strings.Contains(cs.Description, needle) || !hasTag(cs.Tags, TagPrefix+caller.Subject) {
+			continue
+		}
+		cs.Owner = caller.Subject
+		if cs.NetworkID == "" {
+			cs.NetworkID = networkID
+		}
+		p.mu.Lock()
+		if _, known := p.owned[cs.ID]; !known {
+			p.owned[cs.ID] = ownedChangeSet{cs: cs}
+		}
+		p.mu.Unlock()
+		out = append(out, cs)
+	}
+	// Newest first by created_at string (RFC3339 sorts lexically).
+	for i := 0; i < len(out); i++ {
+		for j := i + 1; j < len(out); j++ {
+			if out[j].CreatedAt > out[i].CreatedAt {
+				out[i], out[j] = out[j], out[i]
+			}
+		}
+	}
+	return out, nil
+}
+
+func hasTag(tags []string, t string) bool {
+	for _, x := range tags {
+		if x == t {
+			return true
+		}
+	}
+	return false
+}
+
 // GC deletes this process's stale change sets on a network (tagged
 // TagPrefix+"run:<runID>" from earlier runs, or everything netorch-tagged
 // when all is true). Deleting a change set cascades to its predicted

@@ -80,17 +80,25 @@ func scenario(t *testing.T, h ports.ForwardHTTP, networkID, baseSnapshot string,
 		t.Fatalf("result: %+v", res)
 	}
 
+	found, err := uc.FindByDescription(ctx, caller, networkID, "shut Ethernet1")
+	if err != nil || len(found) == 0 || found[0].ID != cs.ID {
+		t.Fatalf("find by description: %v %+v", err, found)
+	}
+	if theirs, _ := uc.FindByDescription(ctx, other, networkID, "shut Ethernet1"); len(theirs) != 0 {
+		t.Fatal("another caller must not find it")
+	}
+
 	deleted, err := uc.GC(ctx, networkID, true)
 	if err != nil {
 		t.Fatalf("gc: %v", err)
 	}
-	found := false
+	gcHit := false
 	for _, id := range deleted {
 		if id == cs.ID {
-			found = true
+			gcHit = true
 		}
 	}
-	if !found {
+	if !gcHit {
 		t.Fatalf("gc did not delete %s: %v", cs.ID, deleted)
 	}
 	return res

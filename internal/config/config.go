@@ -16,6 +16,26 @@ type Config struct {
 	Server  ServerConfig
 	Forward ForwardConfig
 	MCP     MCPConfig
+	Remote  RemoteConfig
+}
+
+// RemoteConfig governs `forward-mcp serve-http` (remote mode): who may call
+// and which tool classes are exposed. Stdio mode ignores it.
+type RemoteConfig struct {
+	// EnableProposeTools registers propose-class (Forward Predict) tools.
+	// Off by default; callers additionally need the "predict" scope.
+	EnableProposeTools bool `json:"enableProposeTools" env:"FORWARD_ENABLE_PROPOSE_TOOLS"`
+	// Auth selects the identity verifier: "static" (dev-only token table)
+	// or "none" (anonymous; requires AllowAnonymous). "jwt" arrives in M1c.1.
+	Auth string `json:"auth" env:"FORWARD_REMOTE_AUTH"`
+	// StaticTokens is the "token=subject[:scopes[:networks]],..." table for
+	// Auth=static. Never log it.
+	StaticTokens string `json:"-" env:"FORWARD_REMOTE_STATIC_TOKENS"`
+	// AllowAnonymous lets Auth=none serve without credentials. Lab only.
+	AllowAnonymous bool `json:"allowAnonymous" env:"FORWARD_REMOTE_ALLOW_ANONYMOUS"`
+	// Stateless disables MCP session tracking (for load balancers without
+	// sticky sessions).
+	Stateless bool `json:"stateless" env:"FORWARD_REMOTE_STATELESS"`
 }
 
 // ServerConfig holds server-specific configuration
@@ -109,7 +129,7 @@ type RedisConfig struct {
 	MaxRetries      int `json:"maxRetries" env:"REDIS_MAX_RETRIES"`
 	MinIdleConns    int `json:"minIdleConns" env:"REDIS_MIN_IDLE_CONNS"`
 	ConnMaxIdleTime int `json:"connMaxIdleTime" env:"REDIS_CONN_MAX_IDLE_TIME"` // seconds
-	ConnMaxLifetime int `json:"connMaxLifetime" env:"REDIS_CONN_MAX_LIFETIME"` // seconds
+	ConnMaxLifetime int `json:"connMaxLifetime" env:"REDIS_CONN_MAX_LIFETIME"`  // seconds
 }
 
 // LoadConfig loads configuration from environment variables and .env file
@@ -122,17 +142,24 @@ func LoadConfig() *Config {
 			Port: getEnvAsInt("SERVER_PORT", 8080),
 			Host: getEnv("SERVER_HOST", "0.0.0.0"),
 		},
+		Remote: RemoteConfig{
+			EnableProposeTools: getEnvAsBool("FORWARD_ENABLE_PROPOSE_TOOLS", false),
+			Auth:               getEnv("FORWARD_REMOTE_AUTH", "static"),
+			StaticTokens:       getEnv("FORWARD_REMOTE_STATIC_TOKENS", ""),
+			AllowAnonymous:     getEnvAsBool("FORWARD_REMOTE_ALLOW_ANONYMOUS", false),
+			Stateless:          getEnvAsBool("FORWARD_REMOTE_STATELESS", false),
+		},
 		Forward: ForwardConfig{
-			APIKey:            getEnv("FORWARD_API_KEY", ""),
-			APISecret:         getEnv("FORWARD_API_SECRET", ""),
-			APIBaseURL:        getEnv("FORWARD_API_BASE_URL", ""),
-			Timeout:           getEnvAsInt("FORWARD_TIMEOUT", 600), // 10 minutes for enhanced API operations
-			CACertPath:        getEnv("FORWARD_CA_CERT_PATH", ""),
-			ClientCertPath:    getEnv("FORWARD_CLIENT_CERT_PATH", ""),
-			ClientKeyPath:     getEnv("FORWARD_CLIENT_KEY_PATH", ""),
-			DefaultNetworkID:  getEnv("FORWARD_DEFAULT_NETWORK_ID", ""),
-			DefaultSnapshotID: getEnv("FORWARD_DEFAULT_SNAPSHOT_ID", ""),
-			DefaultQueryLimit: getEnvAsInt("FORWARD_DEFAULT_QUERY_LIMIT", 10000),
+			APIKey:               getEnv("FORWARD_API_KEY", ""),
+			APISecret:            getEnv("FORWARD_API_SECRET", ""),
+			APIBaseURL:           getEnv("FORWARD_API_BASE_URL", ""),
+			Timeout:              getEnvAsInt("FORWARD_TIMEOUT", 600), // 10 minutes for enhanced API operations
+			CACertPath:           getEnv("FORWARD_CA_CERT_PATH", ""),
+			ClientCertPath:       getEnv("FORWARD_CLIENT_CERT_PATH", ""),
+			ClientKeyPath:        getEnv("FORWARD_CLIENT_KEY_PATH", ""),
+			DefaultNetworkID:     getEnv("FORWARD_DEFAULT_NETWORK_ID", ""),
+			DefaultSnapshotID:    getEnv("FORWARD_DEFAULT_SNAPSHOT_ID", ""),
+			DefaultQueryLimit:    getEnvAsInt("FORWARD_DEFAULT_QUERY_LIMIT", 10000),
 			CertifiedLibraryPath: getEnv("FORWARD_CERTIFIED_LIBRARY_PATH", "spec/certified"),
 			SemanticCache: SemanticCacheConfig{
 				Enabled:             getEnvAsBool("FORWARD_SEMANTIC_CACHE_ENABLED", true),

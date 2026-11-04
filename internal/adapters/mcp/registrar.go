@@ -97,8 +97,8 @@ func AddTool[In any](r *Registrar, name, description string, h Handler[In]) {
 		Name:        name,
 		Description: description,
 		Annotations: annotationsFor(spec),
-	}, func(ctx context.Context, _ *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
-		caller := ports.CallerFromContext(ctx)
+	}, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
+		ctx, caller := callerFor(ctx, req)
 		if ok, reason := policy.AllowsCall(spec, caller); !ok {
 			if spec.Class == entities.ToolClassPropose && audit != nil {
 				audit.LogProposeCall(ctx, auditEvent(spec, caller, in, entities.AuditOutcomeDenied, reason, 0))

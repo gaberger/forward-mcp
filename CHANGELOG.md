@@ -109,6 +109,12 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - Tools `search_certified_queries`, `check_answerable`, `run_certified_query` (read class) backed by `usecases.CertifiedQueries`; ranking reuses the configured embedding provider plus verbatim synonym boosts; parameters validated against the entry; output shape drift reported as warnings (M1a.3–1a.5)
   - Evidence envelope on every query result: certified runs return `evidence {kind, ref, snapshot_id, library_version, certified}`; `run_nqe_query_by_id` and `search_paths*` append an `Evidence:` line with `certified:false` and the snapshot id (M1a.6–1a.7)
   - New env `FORWARD_CERTIFIED_LIBRARY_PATH` (default `spec/certified`); see `docs/certified-library.md`
+- **Remote mode: `forward-mcp serve-http`** (netorch M1c.0)
+  - Streamable HTTP at `/mcp` (official go-sdk handler) plus `/healthz`; stdio mode unchanged
+  - Bearer authentication through `ports.IdentityVerifier`; caller identity reaches every tool handler via `ports.CallerFromContext`. Dev-only `static` token table now; JWT verifier follows in M1c.1
+  - Remote exposure policy applied at startup: read tools only, propose tools behind `FORWARD_ENABLE_PROPOSE_TOOLS` + `predict` scope, write tools never
+  - New env: `FORWARD_REMOTE_AUTH`, `FORWARD_REMOTE_STATIC_TOKENS`, `FORWARD_REMOTE_ALLOW_ANONYMOUS`, `FORWARD_REMOTE_STATELESS`; see `docs/remote-mode.md`
+  - Dockerfile rebuilt on Go 1.25 with CGO/SQLite, non-root, remote mode by default; `make serve-http`; GitHub Actions CI (gofmt, build, vet, race tests, govulncheck, docker build)
 - **Predict HTTP contract**: `docs/predict-endpoints.md`, generated from the Forward Python SDK's unpublished OpenAPI by `scripts/gen-predict-endpoints`, with round-trip, wait and verdict semantics (netorch 1b.0)
 - **Instance Lock Protection**: Prevent multiple MCP server instances from running simultaneously
   - File-based locking mechanism using PID validation

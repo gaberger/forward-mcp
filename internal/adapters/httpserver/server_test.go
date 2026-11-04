@@ -141,7 +141,7 @@ func TestRemoteListsOnlyReadToolsByDefault(t *testing.T) {
 	for _, tl := range tools.Tools {
 		names = append(names, tl.Name)
 	}
-	if strings.Join(names, ",") != "list_devices,whoami" {
+	if strings.Join(names, ",") != "list_devices,search_configs,whoami" {
 		t.Errorf("expected only read tools, got %v", names)
 	}
 }

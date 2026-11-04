@@ -1,10 +1,11 @@
 # PLAN.md — Agentic NetOps stack on Forward (spec v0.1, 2026-11-04)
 
-Status: v0.3 — 2026-11-04. Done: M1.0, M1a (all), 1b.0, M1c.0 and M1c.3–1c.7. Open: M1c.1/1c.2 (JWT; needs Q3a/Q9), M1b.1–1b.6 (needs doc review + Q2), Eval.
+Status: v0.4 — 2026-11-04. Done: M1.0, M1a, M1b (fixture-tested, PR #7), M1c except JWT, E.1–E.3. **v0.4 changes the platform (§1b): everything outside forward-mcp is built natively in Go on a single-node k0s — no kagent, no Temporal, no OpenShell.** Q3a/Q9 resolved.
 Repo inspected: `gaberger/forward-mcp` @ `be5a7ab` (main, "Untrack local tool caches", 2026-06-11).
 Working branch: `feat/netorch-m1` in `gaberger/forward-mcp`, kept upstream-able. Agents / eval runner / Temporal go in a separate `netorch` repo.
 
 Changes in v0.2: D2 replaced by the hex-as-you-go rule (§1), Q1/Q5 resolved, new §1a Gaps, new D7 (Go, not Rust).
+Changes in v0.4: §1b native platform (D8–D10), M2/M3/S1/S4 rewritten for it, Q3/Q9 resolved, netorch layout updated.
 
 ---
 
@@ -56,6 +57,23 @@ cmd/eval-grader/   # deterministic grader CLI                           (Eval)
 docs/predict-endpoints.md, docs/certified-library.md, docs/remote-mode.md
 ```
 
+## 1b. Platform decision (v0.4): native on k0s
+
+Gary's direction (2026-11-04): *build all native, no external dependencies; k0s as the runtime; small vetted Go modules are fine.* Concretely:
+
+| Spec component | v0.1–0.3 plan | v0.4 |
+|---|---|---|
+| Agent runtime | kagent v1 on Agent Substrate, Claude harness, A2A | **netorch `agentd`** (Go): Claude Messages API over `net/http`, MCP client from the go-sdk already in use, skill packs as versioned prompt files, `POST /agents/{name}/ask` + SSE. One binary, one Deployment. |
+| Change workflow | Temporal | **netorch `flowd`** (Go): durable state machine persisted in SQLite (WAL) per workflow, steps = draft → predict → await-approval (days) → execute-stub → done; signals over HTTP; restart-safe by replaying persisted step records. |
+| Guardrails | OpenShell egress + credential policy | **Kubernetes NetworkPolicy** on k0s (agent pods may reach only forward-mcp and `api.anthropic.com`) + **netorch `tokend`**: a minimal JWT issuer (RS256, JWKS endpoint) so agents hold short-lived tokens and never a Forward credential. |
+| Runtime | kagent's cluster | **k0s** single node (`k0s install controller --single`), kustomize for every netorch component. |
+| Triggers | kagent + Temporal schedules | `agentd` webhook receiver (Forward `SNAPSHOT_READY` / `*_VERIFICATION_FAILURE`), cron inside `flowd`. |
+| Models | Claude via kagent ModelConfig; local lane via tt-inference-server | Claude via `agentd` directly; local lane = OpenAI-compatible endpoint config in `agentd` (S3 unchanged in spirit). |
+
+Spikes change accordingly: **S1** → does NetworkPolicy on k0s actually block the agent pod from everything but forward-mcp and the model endpoint (test with a probe pod)? **S4** → `flowd` activity calling `agentd` over HTTP: auth, streaming, timeouts, cancellation. S2, S3 unchanged.
+
+Decisions: **D8** native agent runner instead of kagent; **D9** native SQLite-backed workflow engine instead of Temporal; **D10** NetworkPolicy + own token issuer instead of OpenShell. Vetted modules allowed: `github.com/golang-jwt/jwt/v5` (forward-mcp verifier + `tokend`), `modernc.org/sqlite` or `mattn/go-sqlite3` (netorch `flowd`; forward-mcp already uses mattn), OTel SDK when M2 needs it.
+
 ## 1a. Gaps — things the spec needs that neither repo has (create or borrow)
 
 | Gap | Create / borrow | Where | When |
@@ -99,7 +117,7 @@ Task IDs are stable; estimates are engineering days, serial.
 | ID | Task | Done when |
 |----|------|-----------|
 | 1c.0 | **Remote transport.** `forward-mcp serve-http` subcommand (keeps stdio as default): `mcp.NewStreamableHTTPHandler`, bind from `ServerConfig{Host,Port}`, `/healthz`, graceful shutdown reusing existing errgroup pattern. Fix Dockerfile (go 1.25, `CGO_ENABLED=1`, alpine + sqlite libs, non-root). | `go test` spins server on ephemeral port and completes initialize + `list_tools` through go-sdk client. Docker image builds. |
-| 1c.1 | `internal/identity`: `Caller{Subject, NetworkIDs []string, Scopes []string, Issuer}`; `FromContext/WithCaller`. JWT verification middleware: issuer + audience + exp + alg allowlist; keys from JWKS URL or static PEM/HMAC via env. **Needs a JWT library → Q3.** | Unit tests: valid, expired, wrong-aud, alg=none, wrong key → 401; claims mapped. |
+| 1c.1 | `adapters/identity/jwt`: verifier over `golang-jwt/jwt/v5`: issuer + audience + exp + alg allowlist (RS256/ES256; HS256 only for lab), keys from a JWKS URL (netorch `tokend`) or static PEM via env; claims `sub`, `scope`, `network_ids` → `Caller`. `FORWARD_REMOTE_AUTH=jwt`. | Unit tests: valid, expired, wrong-aud, alg=none, wrong key → 401; claims mapped. |
 | 1c.2 | **Done via method expressions:** handlers are registered as `(*ForwardMCPService).handler` and the registrar invokes each call on `forCaller(caller)`, a view whose stores are the caller's partitions. Legacy handlers needed no signature change; new handlers take `ctx` and use `ports.CallerFromContext`. | `TestLocalCallerGetsTheUnscopedService` |
 | 1c.3 | **Done, differently than sketched:** instead of a new `subject` column, the caller's partition id `<instance>-<sha256(subject)[:16]>` replaces the instance id in every instance-scoped store (memory graph via `MemorySystem.ForInstance` view, bloom managers per partition, API tracker), and the semantic cache carries the subject in keys and similarity scans. Network stays the second key where the data is network-bound (cache key; memory records carry it) and the caller allow-list is enforced at the tool boundary (1c.5). No schema migration needed; 3.0.0 data stays readable for the local caller. | `isolation_test.go` |
 | 1c.4 | **Isolation tests** (spec acceptance): two callers A/B, same network: A caches a result; B `Get` misses; B `FindSimilarQueries` returns nothing of A's; memory `search_entities` by B returns none of A's; same for bloom. Also A on network N1 vs A on N2. Run with `-race`. | All green under `go test -race`. |
@@ -130,24 +148,25 @@ Task IDs are stable; estimates are engineering days, serial.
 ### Spikes S1, S2 (after M1) — 1d each → `docs/spikes/S1-openshell.md`, `S2-remote-concurrency.md`
 S2 uses 1c.7 metrics + a Go load tool hitting `serve-http` with 5 JWT subjects; reports isolation (re-run 1c.4 under load), 429 behaviour, cache hit rate per subject.
 
-### M2 — Troubleshoot agent (read-only) — 6d
+### M2 — Troubleshoot agent on `agentd` (read-only) — 7d
 | ID | Task |
 |----|------|
-| 2.1 | `netorch/agents/troubleshoot/`: kagent `Agent` (Claude harness), `ModelConfig`, `RemoteMCPServer` → forward-mcp `serve-http` with JWT from a Secret; tool allowlist = read class only. |
-| 2.2 | Skill pack (3 skills): `reachability-triage` (search_paths_bulk, cites path search + snapshot), `what-changed` (list_snapshots → get_config_diff / certified config-change query / NQE diff), `config-history` (device config across snapshots). Each skill's prompt enforces: prefer `check_answerable` → certified; ad-hoc allowed but flagged. |
-| 2.3 | Output contract JSON schema: `{summary, evidence:[{kind, ref, snapshot_id, library_version?}], confidence: 0..1, next_step, verdict: cause|no_network_issue|insufficient_evidence}`; validated by a kagent post-hook or by the grader. No propose tools reachable (policy from 1.0.2 + agent allowlist = defence in depth). |
-| 2.4 | Helm chart + kustomize overlay (kind for dev): forward-mcp Deployment/Service, Secrets via env, OTel collector endpoint configurable; forward-mcp emits OTel traces (needs dependency → Q3) with caller subject + snapshot id attributes, secrets redacted. |
+| 2.0 | `netorch/cmd/agentd`: agent loop = Claude Messages API (tool use) ↔ MCP client (go-sdk) against forward-mcp remote; skill pack = system prompt + skill files loaded from `agents/<name>/`; output contract validated as JSON before returning; `POST /agents/{name}/ask` (sync) and `/ask?stream=1` (SSE); per-agent bearer token for forward-mcp from a Secret; OTel traces with caller subject + snapshot ids. |
+| 2.1 | Troubleshoot agent definition in `agents/troubleshoot/` (prompt + 3 skills, already drafted) with a read-class tool allowlist enforced by `agentd` on top of forward-mcp's policy. |
+| 2.2 | Trigger receiver in `agentd`: Forward webhooks (`SNAPSHOT_READY`, `NQE_VERIFICATION_FAILURE`, `INTENT_VERIFICATION_FAILURE`) → agent ask; HMAC-verified. |
+| 2.3 | `deploy/k0s/`: k0s bootstrap script, kustomize for forward-mcp, agentd, tokend; NetworkPolicy for the agent namespace; secrets out of band. |
+| 2.4 | `netorch eval run -agent agentd` client (replaces the A2A client). |
 | 2.5 | Run Eval on the 10 cases; iterate skill prompts until ≥7/10 with 0 uncited facts; commit baseline report. |
 
-### S4 (after M2) — 1d → `docs/spikes/S4-temporal-a2a.md`
+### S4 (after M2) — 1d → `docs/spikes/S4-flowd-agentd.md`: `flowd` calling `agentd` over HTTP — auth, streaming, timeouts, cancellation, retries without duplicate predictions.
 
-### M3 — Change workflow skeleton — 5d
+### M3 — Change workflow skeleton on `flowd` — 6d
 | ID | Task |
 |----|------|
-| 3.1 | `netorch/workflow/` Temporal Go SDK: `ChangeWorkflow(input)` → activities: `DraftChange` (A2A to Change agent, stub prompt), `RunPredict` (forward-mcp propose tools, flag on, identity = `temporal-change`), `AwaitApproval` (signal `approve`/`reject`, timer from config, default 7d), `ExecuteStub` (records intent only), `Done`. |
-| 3.2 | Every activity input/output + Predict `Result` persisted in workflow history (and mirrored to a SQLite/Postgres table for querying — Q8). |
-| 3.3 | Approval adapters: CLI stub (`netorch approve <wf-id>`) first; Slack or ServiceNow per Q4. |
-| 3.4 | Tests: Temporal test suite — happy path; rejection; timeout; **worker killed mid-approval and restarted** replays and still accepts the signal. Predict mocked with fixture client. |
+| 3.0 | `netorch/cmd/flowd`: durable workflow engine — a workflow is a persisted sequence of step records (SQLite WAL, one row per step with inputs/outputs/evidence); the runner replays completed steps on restart and resumes the first incomplete one; timers persisted; signals (`approve`/`reject`) via `POST /workflows/{id}/signal` with bearer auth; idempotency keys on every outbound call so a crash mid-step never repeats a prediction. |
+| 3.1 | `ChangeWorkflow`: draft (Change agent via `agentd`) → predict (forward-mcp propose tools, identity `flowd-change`) → await approval (timer, default 7d) → execute stub (records intent) → done. |
+| 3.2 | Approval: CLI (`netorch approve <id>`) first; Slack or ServiceNow adapter per Q4. |
+| 3.3 | Tests: happy path; rejection; timeout; **process killed mid-approval and restarted** resumes and still accepts the signal; duplicate-signal and duplicate-step idempotency. |
 
 ### S3 (last) — 1d, lab only → `docs/spikes/S3-local-model-toolcalling.md`
 
@@ -184,14 +203,15 @@ S2 uses 1c.7 metrics + a Go load tool hitting `serve-http` with 5 JWT subjects; 
 | # | Question |
 |---|----------|
 | ~~Q1~~ | **Resolved:** feature branch `feat/netorch-m1` in `gaberger/forward-mcp`, upstream-able; separate `netorch` repo. |
+| Q11 | k0s host: one Linux box/VM (~4 GB) with egress to Forward and `api.anthropic.com` — which one, and who installs k0s? |
 | ★Q2 | Forward instance + network for live tests; token with Predict access; are `PREDICT`, `FIREWALL_PREDICT`, `LOCATION_CONNECTIVITY_DIFFS` org properties enabled? Snapshots usable for the 10 eval incidents? |
-| ★Q3 | **New top-level dependencies** (you asked to be consulted): (a) JWT: `github.com/golang-jwt/jwt/v5` (minimal) or `github.com/lestrrat-go/jwx/v2` (JWKS built in) — I lean jwx if kagent/Substrate issues JWKS, else golang-jwt; (b) OTel: `go.opentelemetry.io/otel` + OTLP exporter (M2); (c) Temporal Go SDK (netorch repo only); (d) `gopkg.in/yaml.v3` is already indirect — promote to direct for library files, or use JSON only? |
+| ~~Q3~~ | **Resolved (v0.4):** small vetted modules are fine. JWT: `golang-jwt/jwt/v5` (JWKS fetch hand-rolled, it is ~60 lines). OTel SDK in M2. No Temporal. Library files stay JSON. |
 | Q4 | Slack vs ServiceNow first for approval (M3). CLI stub ships regardless. |
 | ~~Q5~~ | **Resolved:** hex-as-you-go (D2 revised). |
-| Q6 | Where do I build/test? This sandbox can't (F10). Options: you run `make test` on PRs, or I add GitHub Actions and we rely on it. |
+| ~~Q6~~ | **Resolved:** GitHub Actions on both repos, green. |
 | Q7 | OK to add the missing `[3.0.0]` CHANGELOG entry and fix the Dockerfile as part of M1c.0? |
 | Q8 | M3 persistence: Temporal history only, or also a queryable table (Postgres/SQLite)? |
-| Q9 | JWT issuer for agents: will kagent/Agent Substrate mint them, or do we run a tiny issuer for now (static keys in a Secret)? Affects 1c.1 and S1. |
+| ~~Q9~~ | **Resolved (v0.4):** we build `tokend` (RS256, JWKS). |
 | Q10 | Who is `owner` on seed certified queries, and should `certified:true` require a second reviewer? |
 
 ## 6. Risks
@@ -203,4 +223,4 @@ S2 uses 1c.7 metrics + a Go load tool hitting `serve-http` with 5 JWT subjects; 
 
 ## 7. Order of execution (per spec)
 
-PLAN.md review → M1.0 → M1a → M1c → M1b (+ Eval E.1–E.3 in parallel) → M1 live acceptance → S1, S2 → M2 (+E.4) → S4 → M3 → S3.
+PLAN.md review → M1.0 → M1a → M1c → M1b (+ Eval E.1–E.3 in parallel) → **M1c.1 JWT + `tokend`** → M1 live acceptance → S1 (NetworkPolicy), S2 → M2 on `agentd` (+E.4) → S4 → M3 on `flowd` → S3.

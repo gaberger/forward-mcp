@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 # Build stage. CGO is required by github.com/mattn/go-sqlite3.
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26-alpine AS builder
 
 RUN apk add --no-cache build-base sqlite-dev
 

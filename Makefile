@@ -56,6 +56,18 @@ test-quick:
 	@echo "Running unit tests quickly (no verbose output)..."
 	$(GOTEST) -timeout=60s ./internal/... ./cmd/... -skip 'TestIntegration'
 
+# Run the remote-mode server (Streamable HTTP on SERVER_HOST:SERVER_PORT).
+# Requires FORWARD_REMOTE_STATIC_TOKENS (dev) or FORWARD_REMOTE_AUTH=none with
+# FORWARD_REMOTE_ALLOW_ANONYMOUS=true (lab).
+serve-http: build
+	@echo "Starting Forward MCP remote server..."
+	./$(BUILD_DIR)/$(BINARY_NAME) serve-http
+
+# Grade the seed eval case against its recording (no Forward needed).
+eval-grade-seed:
+	$(GOCMD) run ./cmd/eval-grader -case cmd/eval-grader/testdata/case-bgp-idle-01.json \
+		-answer cmd/eval-grader/testdata/answer-bgp-idle-01.json -fixture cmd/eval-grader/testdata/fixture.json -v
+
 # Run integration tests with timeout
 test-integration:
 	@echo "Running integration tests (with 60s timeout)..."

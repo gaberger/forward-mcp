@@ -9,10 +9,18 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/forward-mcp/internal/adapters/auditlog"
+	"github.com/forward-mcp/internal/adapters/httpserver"
+	"github.com/forward-mcp/internal/adapters/identity/static"
+	mcpadapter "github.com/forward-mcp/internal/adapters/mcp"
 	"github.com/forward-mcp/internal/config"
+	"github.com/forward-mcp/internal/domain/entities"
+	"github.com/forward-mcp/internal/domain/services/ratelimit"
 	"github.com/forward-mcp/internal/instancelock"
 	"github.com/forward-mcp/internal/logger"
+	"github.com/forward-mcp/internal/ports"
 	"github.com/forward-mcp/internal/service"
+	"github.com/forward-mcp/internal/usecases"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -30,6 +38,12 @@ func main() {
 	// so a client respawn of the stdio server cannot interrupt them.
 	if len(os.Args) > 1 && os.Args[1] == "hydrate" {
 		runHydrateCommand(os.Args[2:])
+		return
+	}
+	// Remote mode: Streamable HTTP with per-caller identity and the
+	// read-only-by-default tool policy. Stdio (below) is unchanged.
+	if len(os.Args) > 1 && os.Args[1] == "serve-http" {
+		runServeHTTP(os.Args[2:])
 		return
 	}
 
@@ -223,6 +237,105 @@ func runHydrateCommand(args []string) {
 	}
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "hydrate failed: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// runServeHTTP implements `forward-mcp serve-http`: the remote-mode server
+// for agents and humans (PLAN.md M1c.0). Only read-class tools are exposed
+// unless FORWARD_ENABLE_PROPOSE_TOOLS=true; write-class tools never are.
+func runServeHTTP(args []string) {
+	flags := flag.NewFlagSet("serve-http", flag.ExitOnError)
+	addr := flags.String("addr", "", "listen address (default SERVER_HOST:SERVER_PORT, 0.0.0.0:8080)")
+	flags.Usage = func() {
+		fmt.Fprintf(flags.Output(), "Usage: %s serve-http [flags]\n\nServes MCP over Streamable HTTP at /mcp with bearer authentication.\n"+
+			"Identity: FORWARD_REMOTE_AUTH=static with FORWARD_REMOTE_STATIC_TOKENS=\"token=subject[:scopes[:networks]],...\" (dev only),\n"+
+			"or FORWARD_REMOTE_AUTH=none with FORWARD_REMOTE_ALLOW_ANONYMOUS=true (lab only).\n"+
+			"Propose tools: FORWARD_ENABLE_PROPOSE_TOOLS=true (callers also need the \"predict\" scope).\n\nFlags:\n", os.Args[0])
+		flags.PrintDefaults()
+	}
+	if err := flags.Parse(args); err != nil {
+		os.Exit(2)
+	}
+
+	log := logger.New()
+	cfg := config.LoadConfig()
+	if *addr == "" {
+		*addr = fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
+	}
+
+	var verifier ports.IdentityVerifier
+	switch cfg.Remote.Auth {
+	case "static":
+		v, err := static.Parse(cfg.Remote.StaticTokens)
+		if err != nil {
+			log.Fatalf("serve-http: %v", err)
+		}
+		verifier = v
+		log.Warn("serve-http: using the STATIC token verifier (development only); subjects: %v", v.Subjects())
+	case "none":
+		if !cfg.Remote.AllowAnonymous {
+			log.Fatalf("serve-http: FORWARD_REMOTE_AUTH=none requires FORWARD_REMOTE_ALLOW_ANONYMOUS=true")
+		}
+		log.Warn("serve-http: ANONYMOUS access enabled; every caller is %q (lab only)", entities.LocalSubject)
+	default:
+		log.Fatalf("serve-http: unsupported FORWARD_REMOTE_AUTH=%q (static|none; jwt arrives in M1c.1)", cfg.Remote.Auth)
+	}
+
+	log.Info("Forward MCP remote server starting on %s (API: %s)", *addr, cfg.Forward.APIBaseURL)
+	forwardService := service.NewForwardMCPService(cfg, log)
+
+	server := mcp.NewServer(&mcp.Implementation{
+		Name:    "forward-mcp",
+		Title:   "Forward Networks MCP Server",
+		Version: serverVersion,
+	}, &mcp.ServerOptions{Instructions: serverInstructions})
+
+	exposure := usecases.NewToolExposure(entities.ServeModeRemote, cfg.Remote.EnableProposeTools)
+	registrar := mcpadapter.NewRegistrar(server, exposure, auditlog.New(log)).
+		WithRateLimiter(ratelimit.New(cfg.Remote.RateLimitPerMinute, cfg.Remote.RateLimitBurst))
+	if err := forwardService.RegisterToolsWith(registrar); err != nil {
+		log.Fatalf("Failed to register tools: %v", err)
+	}
+	log.Info("Tool exposure: %s; withheld: %v", registrar.Summary(), registrar.Skipped())
+	if err := forwardService.RegisterPrompts(server); err != nil {
+		log.Fatalf("Failed to register prompts: %v", err)
+	}
+	if err := forwardService.RegisterResources(server); err != nil {
+		log.Fatalf("Failed to register resources: %v", err)
+	}
+
+	httpSrv, err := httpserver.New(server, httpserver.Options{
+		Addr:           *addr,
+		Verifier:       verifier,
+		AllowAnonymous: cfg.Remote.AllowAnonymous && verifier == nil,
+		Stateless:      cfg.Remote.Stateless,
+	})
+	if err != nil {
+		log.Fatalf("serve-http: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	shutdown := make(chan os.Signal, 1)
+	signal.Notify(shutdown, syscall.SIGINT, syscall.SIGTERM)
+	go func() {
+		sig := <-shutdown
+		log.Info("Received signal %v, shutting down...", sig)
+		cancel()
+	}()
+
+	runErr := httpSrv.ListenAndServe(ctx)
+	if runErr != nil {
+		log.Error("Server error: %v", runErr)
+	}
+	if err := forwardService.Shutdown(30 * time.Second); err != nil {
+		log.Error("Error during service shutdown: %v", err)
+	}
+	if err := log.Close(); err != nil {
+		fmt.Fprintf(os.Stderr, "warning: failed to close logger: %v\n", err)
+	}
+	if runErr != nil {
 		os.Exit(1)
 	}
 }

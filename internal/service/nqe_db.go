@@ -566,7 +566,7 @@ func (db *NQEDatabase) GetAllInstanceIDs() ([]InstanceInfo, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan instance info: %w", err)
 		}
-		
+
 		instance.LastSync = time.Unix(lastSync, 0)
 		instance.FirstSync = time.Unix(firstSync, 0)
 		instances = append(instances, instance)
@@ -577,10 +577,10 @@ func (db *NQEDatabase) GetAllInstanceIDs() ([]InstanceInfo, error) {
 
 // InstanceInfo represents information about a database instance
 type InstanceInfo struct {
-	ID          string    `json:"id"`
-	QueryCount  int       `json:"query_count"`
-	LastSync    time.Time `json:"last_sync"`
-	FirstSync   time.Time `json:"first_sync"`
+	ID         string    `json:"id"`
+	QueryCount int       `json:"query_count"`
+	LastSync   time.Time `json:"last_sync"`
+	FirstSync  time.Time `json:"first_sync"`
 }
 
 // Close closes the database connection

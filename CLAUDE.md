@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Build Commands
 
-**Requirements**: Go 1.24+, CGO enabled (required for SQLite)
+**Requirements**: Go 1.26+, CGO enabled (required for SQLite)
 
 ```bash
 # Build the MCP server (CGO_ENABLED=1 required for SQLite)

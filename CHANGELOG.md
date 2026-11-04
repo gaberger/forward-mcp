@@ -96,6 +96,36 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
 ## [Unreleased]
 
 ### Added
+- **Tool classes and serve-mode policy** (netorch M1.0, see `PLAN.md`)
+  - Every tool is classified `read`, `propose` or `write` in `internal/domain/services/toolpolicy.DefaultCatalog`; registering an uncatalogued tool fails at startup
+  - `ServeModeStdio` exposes all classes (unchanged 3.0.0 behaviour); `ServeModeRemote` exposes only `read` tools, adds `propose` tools when enabled, and can never expose `write` tools
+  - Propose-class calls require the caller to hold the `predict` scope and are audit-logged as `AUDIT {...}` JSON lines with identifiers only (secrets redacted)
+  - Tool registration now goes through `internal/adapters/mcp.Registrar`; `ForwardMCPService.RegisterToolsWith` accepts any registrar, `RegisterTools` keeps the stdio behaviour
+  - New hex-architecture packages per ADR-001: `domain/entities` (ToolClass, Caller, AuditEvent), `ports` (ToolRegistry, ToolPolicy, AuditLogger, IdentityVerifier), `usecases` (ToolExposure), `adapters/mcp`, `adapters/auditlog`
+- **Certified NQE library, schema and loader** (netorch M1a.1)
+  - `spec/certified/`: versioned library (`VERSION`, `queries/<id>.json`, `fixtures/`) with three seed entries
+  - `domain/entities.CertifiedQuery` / `Evidence`; `domain/services/certified` validation rules (every problem reported with file and field; `certified:true` requires owner, fixture and output schema)
+  - `adapters/certifiedfs` loads any `fs.FS`; golden test proves the checked-in library always loads
+  - Tools `search_certified_queries`, `check_answerable`, `run_certified_query` (read class) backed by `usecases.CertifiedQueries`; ranking reuses the configured embedding provider plus verbatim synonym boosts; parameters validated against the entry; output shape drift reported as warnings (M1a.3–1a.5)
+  - Evidence envelope on every query result: certified runs return `evidence {kind, ref, snapshot_id, library_version, certified}`; `run_nqe_query_by_id` and `search_paths*` append an `Evidence:` line with `certified:false` and the snapshot id (M1a.6–1a.7)
+  - New env `FORWARD_CERTIFIED_LIBRARY_PATH` (default `spec/certified`); see `docs/certified-library.md`
+- **Remote mode: `forward-mcp serve-http`** (netorch M1c.0)
+  - Streamable HTTP at `/mcp` (official go-sdk handler) plus `/healthz`; stdio mode unchanged
+  - Bearer authentication through `ports.IdentityVerifier`; caller identity reaches every tool handler via `ports.CallerFromContext`. Dev-only `static` token table now; JWT verifier follows in M1c.1
+  - Remote exposure policy applied at startup: read tools only, propose tools behind `FORWARD_ENABLE_PROPOSE_TOOLS` + `predict` scope, write tools never
+  - New env: `FORWARD_REMOTE_AUTH`, `FORWARD_REMOTE_STATIC_TOKENS`, `FORWARD_REMOTE_ALLOW_ANONYMOUS`, `FORWARD_REMOTE_STATELESS`; see `docs/remote-mode.md`
+  - Dockerfile rebuilt on Go 1.25 with CGO/SQLite, non-root, remote mode by default; `make serve-http`; GitHub Actions CI (gofmt, build, vet, race tests, govulncheck, docker build)
+- **Per-identity isolation** (netorch M1c.3–1c.4, spec non-negotiable #5)
+  - Semantic cache entries carry the caller subject; keys, exact hits and similarity scans are confined to the caller
+  - Memory graph, API tracker and bloom filters/indexes use the caller's partition id (`<instance>-<sha256(subject)[:16]>`) in place of the instance id; `MemorySystem.ForInstance` views share one SQLite handle
+  - Tool handlers run on a caller-scoped service view (`forCaller`), registered as method expressions, so no handler needed rewriting; stdio keeps the unpartitioned service and its existing data
+  - `isolation_test.go`: cross-identity read/match/delete attempts on cache, memory graph and bloom filters all fail
+- **Network allow-list, rate limit, log redaction** (netorch M1c.5–1c.7)
+  - A caller with network ids is denied Forward-bound tools for other networks and must name a network explicitly
+  - Per-subject token-bucket rate limit (`FORWARD_REMOTE_RATE_LIMIT_PER_MIN`, `_BURST`)
+  - Every logger line, tool-call argument dump and error passes through `domain/services/redact` (JWTs, bearer/basic values, `key=value` secrets)
+- **Eval grader** (netorch E.1–E.2): `cmd/eval-grader` grades an agent answer against a replay case deterministically — every gold evidence item must be cited and must reproduce on re-run (row-set comparison with normalised keys, or path outcome); the verdict must match; uncited network facts are detected from explicit `facts` or from the summary heuristically. Re-run backends: live Forward (in-process, same certified library and client as the server; `-record` captures a fixture) or a recorded fixture for CI. Seed case, answer and recording under `cmd/eval-grader/testdata`; `make eval-grade-seed`
+- **Predict HTTP contract**: `docs/predict-endpoints.md`, generated from the Forward Python SDK's unpublished OpenAPI by `scripts/gen-predict-endpoints`, with round-trip, wait and verdict semantics (netorch 1b.0)
 - **Instance Lock Protection**: Prevent multiple MCP server instances from running simultaneously
   - File-based locking mechanism using PID validation
   - Automatic stale lock detection and cleanup

@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/forward-mcp/internal/domain/services/redact"
 )
 
 // Logger wraps the standard logger with level control and file output
@@ -144,7 +146,7 @@ func (l *Logger) logToFile(level, message, tool string, duration *time.Duration,
 
 // Info logs informational messages (always shown)
 func (l *Logger) Info(format string, args ...interface{}) {
-	message := fmt.Sprintf(format, args...)
+	message := redact.String(fmt.Sprintf(format, args...))
 	l.infoLogger.Printf("%s", message)
 	l.logToFile("info", message, "", nil, nil)
 }
@@ -152,7 +154,7 @@ func (l *Logger) Info(format string, args ...interface{}) {
 // Debug logs debug messages (only shown if debug mode is enabled)
 func (l *Logger) Debug(format string, args ...interface{}) {
 	if l.debugMode {
-		message := fmt.Sprintf(format, args...)
+		message := redact.String(fmt.Sprintf(format, args...))
 		l.debugLogger.Printf("%s", message)
 		l.logToFile("debug", message, "", nil, nil)
 	}
@@ -160,14 +162,14 @@ func (l *Logger) Debug(format string, args ...interface{}) {
 
 // Error logs error messages (always shown)
 func (l *Logger) Error(format string, args ...interface{}) {
-	message := fmt.Sprintf(format, args...)
+	message := redact.String(fmt.Sprintf(format, args...))
 	l.infoLogger.Printf("%s", "[ERROR] "+message)
 	l.logToFile("error", message, "", nil, nil)
 }
 
 // Fatalf logs an error message and exits the program
 func (l *Logger) Fatalf(format string, args ...interface{}) {
-	message := fmt.Sprintf(format, args...)
+	message := redact.String(fmt.Sprintf(format, args...))
 	l.infoLogger.Printf("%s", "[FATAL] "+message)
 	l.logToFile("fatal", message, "", nil, nil)
 	l.Close() // Ensure file is closed before exit
@@ -176,7 +178,7 @@ func (l *Logger) Fatalf(format string, args ...interface{}) {
 
 // Warn logs warning messages (always shown)
 func (l *Logger) Warn(format string, args ...interface{}) {
-	message := fmt.Sprintf(format, args...)
+	message := redact.String(fmt.Sprintf(format, args...))
 	l.infoLogger.Printf("%s", "[WARN] "+message)
 	l.logToFile("warn", message, "", nil, nil)
 }
@@ -203,12 +205,12 @@ func (l *Logger) LogToolCall(toolName string, args interface{}, duration time.Du
 	// Add args if debug mode is enabled
 	if l.debugMode {
 		if argsJSON, jsonErr := json.Marshal(args); jsonErr == nil {
-			context["args"] = string(argsJSON)
+			context["args"] = redact.String(string(argsJSON))
 		}
 	}
 
 	if err != nil {
-		context["error"] = err.Error()
+		context["error"] = redact.String(err.Error())
 		message := fmt.Sprintf("Tool %s failed (duration: %v): %v", toolName, duration, err)
 		l.Error("%s", message)
 		l.logToFile("error", message, toolName, &duration, context)

@@ -3,6 +3,8 @@ package service
 import (
 	"context"
 	"fmt"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -564,10 +566,11 @@ func createTestService() *ForwardMCPService {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	service := &ForwardMCPService{
-		forwardClient: NewMockForwardClient(),
-		config:        cfg,
-		logger:        logger,
-		instanceID:    "test", // Add instance ID for test service
+		forwardClient:    NewMockForwardClient(),
+		embeddingService: embeddingService,
+		config:           cfg,
+		logger:           logger,
+		instanceID:       "test", // Add instance ID for test service
 		defaults: &ServiceDefaults{
 			NetworkID:  "162112",
 			SnapshotID: "",
@@ -584,9 +587,15 @@ func createTestService() *ForwardMCPService {
 		}(),
 		bloomManager:      NewBloomSearchManager(logger, "test"),
 		bloomIndexManager: NewBloomIndexManager(logger, "/tmp"),
+		partitions:        newPartitions(filepath.Join(os.TempDir(), "forward-mcp-test-bloom")),
 		ctx:               ctx,
 		cancelFunc:        cancel,
 	}
+
+	// Certified library from the repo (tests run from internal/service).
+	// Ranking needs real (keyword) embeddings; the mock returns noise.
+	service.embeddingService = NewKeywordEmbeddingService()
+	service.initCertified("../../spec/certified")
 
 	return service
 }

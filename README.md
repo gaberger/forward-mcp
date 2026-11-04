@@ -46,7 +46,7 @@ The client in `internal/forward` was audited against `https://docs.fwd.app/lates
 - **internal/logger**: Provides logging utilities (stderr/file only — stdout is reserved for MCP protocol messages).
 
 ## Prerequisites
-- Go 1.25 or later
+- Go 1.26 or later
 - CGO enabled (required for SQLite)
 - Access to Forward Networks API (API URL and API Key)
 

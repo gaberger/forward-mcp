@@ -1,6 +1,6 @@
 module github.com/forward-mcp
 
-go 1.25.0
+go 1.26.0
 
 require (
 	github.com/danthegoodman1/bloomsearch v0.0.0-20250717190656-b4b2ee2c8c81

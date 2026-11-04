@@ -1,0 +1,11 @@
+{
+  "queries": {
+    "certified:bgp-peerings-not-established@1@fixture-snap-1": [
+      {"device": "router-1", "vrf": "default", "neighborAddress": "192.0.2.2", "remoteAs": 65002, "state": "IDLE"},
+      {"device": "router-1", "vrf": "default", "neighborAddress": "192.0.2.6", "remoteAs": 65003, "state": "ACTIVE"}
+    ]
+  },
+  "paths": {
+    "path:10.1.1.10->10.2.2.20@fixture-snap-1": "DROPPED"
+  }
+}

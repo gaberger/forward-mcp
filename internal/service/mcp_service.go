@@ -12,9 +12,13 @@ import (
 	"sync"
 	"time"
 
+	"github.com/forward-mcp/internal/adapters/auditlog"
+	mcpadapter "github.com/forward-mcp/internal/adapters/mcp"
 	"github.com/forward-mcp/internal/config"
+	"github.com/forward-mcp/internal/domain/entities"
 	"github.com/forward-mcp/internal/forward"
 	"github.com/forward-mcp/internal/logger"
+	"github.com/forward-mcp/internal/usecases"
 	_ "github.com/mattn/go-sqlite3"
 	mcp "github.com/modelcontextprotocol/go-sdk/mcp"
 	"golang.org/x/sync/errgroup"
@@ -129,6 +133,9 @@ func (wm *WorkflowManager) Close() {
 // ForwardMCPService implements Forward Networks MCP tools using mcp-golang
 type ForwardMCPService struct {
 	forwardClient     forward.ClientInterface
+	embeddingService  EmbeddingService
+	certified         *usecases.CertifiedQueries
+	certifiedErr      error
 	config            *config.Config
 	logger            *logger.Logger
 	instanceID        string // Unique identifier for this Forward Networks instance
@@ -141,6 +148,12 @@ type ForwardMCPService struct {
 	apiTracker        *APIMemoryTracker   // API result tracking using memory system
 	bloomManager      *BloomSearchManager // Bloom filter for efficient large result filtering
 	bloomIndexManager *BloomIndexManager  // Persistent bloom index for large NQE results
+
+	// Per-identity isolation (caller_scope.go). subject/caller are set only
+	// on views returned by forCaller; partitions is shared by all views.
+	subject    string
+	caller     entities.Caller
+	partitions *partitions
 	// Context cancellation for graceful shutdown
 	ctx        context.Context
 	cancelFunc context.CancelFunc
@@ -214,7 +227,8 @@ func NewForwardMCPService(cfg *config.Config, logger *logger.Logger) *ForwardMCP
 	logger.Info("Bloom search manager initialized for efficient large result filtering")
 
 	// Create persistent bloom index manager for large NQE results
-	bloomIndexDir := filepath.Join("data", "bloom_indexes", instanceID)
+	bloomIndexBase := filepath.Join("data", "bloom_indexes")
+	bloomIndexDir := filepath.Join(bloomIndexBase, instanceID)
 	bloomIndexManager := NewBloomIndexManager(logger, bloomIndexDir)
 	logger.Info("Persistent bloom index manager initialized for large NQE results")
 
@@ -222,10 +236,11 @@ func NewForwardMCPService(cfg *config.Config, logger *logger.Logger) *ForwardMCP
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	service := &ForwardMCPService{
-		forwardClient: forwardClient,
-		config:        cfg,
-		logger:        logger,
-		instanceID:    instanceID,
+		forwardClient:    forwardClient,
+		embeddingService: embeddingService,
+		config:           cfg,
+		logger:           logger,
+		instanceID:       instanceID,
 		defaults: &ServiceDefaults{
 			NetworkID:  cfg.Forward.DefaultNetworkID,
 			SnapshotID: cfg.Forward.DefaultSnapshotID,
@@ -239,9 +254,13 @@ func NewForwardMCPService(cfg *config.Config, logger *logger.Logger) *ForwardMCP
 		apiTracker:        apiTracker,
 		bloomManager:      bloomManager,
 		bloomIndexManager: bloomIndexManager,
+		partitions:        newPartitions(bloomIndexBase),
 		ctx:               ctx,
 		cancelFunc:        cancelFunc,
 	}
+
+	// Certified NQE library (M1a). Non-fatal if missing; tools report why.
+	service.initCertified(cfg.Forward.CertifiedLibraryPath)
 
 	// Set up database callback to automatically refresh query index when database is updated
 	if database != nil && queryIndex != nil {
@@ -495,145 +514,158 @@ func (s *ForwardMCPService) timeAndLogTool(toolName string, args interface{}, fn
 }
 
 // RegisterTools registers all Forward Networks tools with the MCP server
+// RegisterTools registers every tool for the historical stdio server: all
+// tool classes are exposed, matching 3.0.0 behaviour exactly. Remote mode
+// builds its own Registrar with a restrictive policy and calls
+// RegisterToolsWith directly.
 func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
+	r := mcpadapter.NewRegistrar(server, usecases.NewToolExposure(entities.ServeModeStdio, true), auditlog.New(s.logger))
+	return s.RegisterToolsWith(r)
+}
+
+// RegisterToolsWith registers tools through r, which applies the tool-class
+// policy for its serve mode. It returns an error if any tool is missing
+// from the catalog, so an unclassified tool can never ship.
+func (s *ForwardMCPService) RegisterToolsWith(r *mcpadapter.Registrar) error {
+	server := r.Server()
 	// Network Management Tools
-	addTool(server, "list_networks",
+	addTool(r, s, "list_networks",
 		"List all networks in the Forward platform. Returns network IDs, names, and descriptions. Use this to discover available networks or find network IDs for other operations. Supports pagination (limit/offset) and memory storage for large datasets.",
-		s.listNetworks)
+		(*ForwardMCPService).listNetworks)
 
-	addTool(server, "create_network",
+	addTool(r, s, "create_network",
 		"Create a new network in the Forward platform. Requires a network name. Returns the new network with ID for subsequent operations.",
-		s.createNetwork)
+		(*ForwardMCPService).createNetwork)
 
-	// addTool(server, "delete_network",
+	// addTool(r, s, "delete_network",
 	// 	"Delete a network from the Forward platform. Requires network_id. WARNING: This permanently deletes all associated data.",
 	// 	s.deleteNetwork)
 
-	addTool(server, "update_network",
+	addTool(r, s, "update_network",
 		"Update network properties in the Forward platform. Requires network_id and at least one property to update (name or description).",
-		s.updateNetwork)
+		(*ForwardMCPService).updateNetwork)
 
 	// Path Search Tools
-	addTool(server, "search_paths",
+	addTool(r, s, "search_paths",
 		"🔍 **SINGLE PATH SEARCH**: Execute a single path search by tracing packets through the network.\n\nExecute path searches by tracing packets through the network. This tool is optimized for single path queries.\n\n**Source Specification Rules:**\n- **Option 1**: Use 'from' (device name) - API will use the device as source\n- **Option 2**: Use 'src_ip' (IP address/subnet) - API will resolve the IP to source locations\n- **Option 3**: Use both 'from' + 'src_ip' for precise packet header specification\n\n**Destination Specification:**\n- **REQUIRED**: 'dst_ip' must be a valid IP address or CIDR\n- **IMPORTANT**: Device names are NOT supported in dst_ip - use actual IP addresses\n\n**Best Practices:**\n- Use 'intent' parameter to control search behavior (PREFER_DELIVERED, PREFER_VIOLATIONS, VIOLATIONS_ONLY)\n- Set 'max_results' and 'max_candidates' to control response size and performance\n- Use 'max_seconds' for timeout control\n- 'snapshot_id' is optional - API uses latest processed snapshot if omitted\n\n**For multiple paths, use search_paths_bulk for better performance.**",
-		s.searchPathsEntry)
+		(*ForwardMCPService).searchPathsEntry)
 
-	addTool(server, "search_paths_bulk",
+	addTool(r, s, "search_paths_bulk",
 		"🚀 **RECOMMENDED**: Use this tool for path searches (single or bulk) with better performance.\n\nExecute path searches by tracing packets through the network. Supports both single and bulk path searches.\n\n**Source Specification Rules:**\n- **Option 1**: Use 'from' (device name) - API will use the device as source\n- **Option 2**: Use 'src_ip' (IP address/subnet) - API will resolve the IP to source locations\n- **Option 3**: Use both 'from' + 'src_ip' for precise packet header specification\n\n**Destination Specification:**\n- **REQUIRED**: 'dst_ip' must be a valid IP address or CIDR\n- **IMPORTANT**: Device names are NOT supported in dst_ip - use actual IP addresses\n\n**Best Practices:**\n- Use 'intent' parameter to control search behavior (PREFER_DELIVERED, PREFER_VIOLATIONS, VIOLATIONS_ONLY)\n- Set 'max_results' and 'max_candidates' to control response size and performance\n- Use 'max_seconds' and 'max_overall_seconds' for timeout control\n- 'snapshot_id' is optional - API uses latest processed snapshot if omitted\n\n**Request Format:** Provide an array of path search queries, each with 'dst_ip' and either 'from' or 'src_ip'.",
-		s.searchPathsBulkEntry)
+		(*ForwardMCPService).searchPathsBulkEntry)
 
 	// Register network prefix analysis tool
-	addTool(server, "analyze_network_prefixes",
+	addTool(r, s, "analyze_network_prefixes",
 		"🔍 **Network Prefix Discovery & Connectivity Analysis**\n\nDiscover network prefixes, map them to devices, and analyze connectivity between sites using different aggregation levels.\n\n**Capabilities:**\n- Discover network prefixes (/8, /16, /24, etc.) and map to devices\n- Analyze connectivity between sites using aggregated prefixes\n- Identify network topology patterns and connectivity gaps\n- Generate connectivity matrices for different aggregation levels\n\n**Use Cases:**\n- Site-to-site connectivity analysis\n- Network segmentation validation\n- Route aggregation verification\n- Multi-site network planning\n\n**Parameters:**\n- network_id: Target network for analysis\n- prefix_levels: Aggregation levels to analyze (e.g., ['/8', '/16', '/24'])\n- from_devices/to_devices: Specific devices to analyze\n- intent: Search intent (PREFER_DELIVERED, PREFER_VIOLATIONS, VIOLATIONS_ONLY)\n- max_results: Maximum results per analysis",
-		s.analyzeNetworkPrefixes)
+		(*ForwardMCPService).analyzeNetworkPrefixes)
 
 	// NQE Tools
-	addTool(server, "run_nqe_query_by_id",
+	addTool(r, s, "run_nqe_query_by_id",
 		"🚀 **RECOMMENDED**: Use this tool for standard network analysis and compliance checks.\n\nRun a Network Query Engine (NQE) query using a predefined query ID from the library. This is the preferred method for consistent, reliable network analysis.\n\n**Best Practices:**\n- Use 'all_results: true' to fetch complete datasets\n- Set appropriate 'limit' and 'offset' for pagination\n- Use 'parameters' for dynamic query customization\n- Check query descriptions with list_nqe_queries first\n\n**Performance Tips:**\n- Large results are automatically cached and chunked\n- Use semantic search to find relevant queries\n- Set reasonable limits to avoid timeouts",
-		s.runNQEQueryByID)
+		(*ForwardMCPService).runNQEQueryByID)
 
-	addTool(server, "list_nqe_queries",
+	addTool(r, s, "list_nqe_queries",
 		"🔍 **DISCOVERY TOOL**: Find available NQE queries for your analysis needs.\n\nList available NQE queries from the Forward Networks query library. Use this to discover predefined queries for reports and analysis.\n\n**Usage Tips:**\n- Filter by directory (e.g., '/L3/Basic/', '/L3/Advanced/', '/L3/Security/')\n- Use search_nqe_queries for semantic search\n- Check query descriptions before running\n- Use query IDs with run_nqe_query_by_id",
-		s.listNQEQueries)
+		(*ForwardMCPService).listNQEQueries)
 
 	// First-Class Query Tools - Most Important Network Operations
-	addTool(server, "get_device_basic_info",
+	addTool(r, s, "get_device_basic_info",
 		"📊 **ESSENTIAL**: Get comprehensive device inventory information.\n\nGet basic device information including names, platforms, and management IPs. This is the primary tool for device discovery and inventory management.\n\n**What you get:**\n- Device names and types\n- Platform and OS information\n- Management IP addresses\n- Interface details\n- Device status and properties\n\n**Best Practices:**\n- Use this as your first step in network analysis\n- Set appropriate limits for large networks\n- Use filters to focus on specific device types\n- Combine with get_device_hardware for complete inventory",
-		s.getDeviceBasicInfo)
+		(*ForwardMCPService).getDeviceBasicInfo)
 
-	addTool(server, "get_device_hardware",
+	addTool(r, s, "get_device_hardware",
 		"🔧 **HARDWARE INVENTORY**: Get detailed hardware information for lifecycle management.\n\nGet device hardware information including models, serial numbers, and hardware details. Critical for hardware inventory and lifecycle management.\n\n**What you get:**\n- Device models and serial numbers\n- Hardware specifications\n- Vendor and platform details\n- Interface hardware information\n- Asset tracking data\n\n**Use Cases:**\n- Hardware refresh planning\n- Asset inventory management\n- Support contract validation\n- Capacity planning",
-		s.getDeviceHardware)
+		(*ForwardMCPService).getDeviceHardware)
 
-	addTool(server, "get_hardware_support",
+	addTool(r, s, "get_hardware_support",
 		"⚠️ **COMPLIANCE CRITICAL**: Check hardware support status for security and compliance.\n\nGet hardware support status including end-of-life and support dates. Essential for compliance and planning hardware refreshes.\n\n**What you get:**\n- End-of-life dates\n- Support contract status\n- Security vulnerability information\n- Recommended upgrade paths\n- Compliance status\n\n**Critical Use Cases:**\n- Security compliance audits\n- Hardware refresh planning\n- Risk assessment\n- Budget planning for upgrades",
-		s.getHardwareSupport)
+		(*ForwardMCPService).getHardwareSupport)
 
-	addTool(server, "get_os_support",
+	addTool(r, s, "get_os_support",
 		"🔒 **SECURITY ESSENTIAL**: Check OS support status for security compliance.\n\nGet operating system support status including OS versions and support dates. Critical for security compliance and OS upgrade planning.\n\n**What you get:**\n- OS version information\n- Support end dates\n- Security patch status\n- Upgrade recommendations\n- Compliance status\n\n**Security Use Cases:**\n- Security compliance audits\n- Vulnerability assessment\n- Patch management planning\n- OS upgrade planning",
-		s.getOSSupport)
+		(*ForwardMCPService).getOSSupport)
 
-	addTool(server, "search_configs",
+	addTool(r, s, "search_configs",
 		"🔍 **CONFIGURATION SEARCH**: Search device configurations for specific patterns and settings.\n\nSearch device configurations for specific patterns, commands, or settings. Use this to find specific configurations across your network.\n\n**Pattern Examples:**\n```\ninterface\n  zone-member security\n  ip address {ip:string}\n```\n\n**Best Practices:**\n- Use hierarchical patterns with indentation\n- Extract variables with {name:type} syntax\n- Filter by device names for targeted searches\n- Use specific patterns for better results\n\n**Common Use Cases:**\n- Find specific interface configurations\n- Locate security policies\n- Identify routing configurations\n- Audit configuration compliance",
-		s.searchConfigs)
+		(*ForwardMCPService).searchConfigs)
 
-	addTool(server, "get_config_diff",
+	addTool(r, s, "get_config_diff",
 		"Compare network configurations between snapshots to identify changes. Essential for change tracking and troubleshooting configuration drift.",
-		s.getConfigDiff)
+		(*ForwardMCPService).getConfigDiff)
 
 	// Device Management Tools
-	addTool(server, "list_devices",
+	addTool(r, s, "list_devices",
 		"List devices in a network. Requires network_id. Returns basic device inventory with names, types, and status. Supports pagination with limit and offset. Use for device discovery and inventory management.",
-		s.listDevices)
+		(*ForwardMCPService).listDevices)
 
-	addTool(server, "get_device_locations",
+	addTool(r, s, "get_device_locations",
 		"Get device location mappings for a network. Requires network_id. Shows which devices are assigned to which physical locations. Use for topology planning and device organization.",
-		s.getDeviceLocations)
+		(*ForwardMCPService).getDeviceLocations)
 
 	// Snapshot Management Tools
-	addTool(server, "list_snapshots",
+	addTool(r, s, "list_snapshots",
 		"List network configuration snapshots. Requires network_id. Shows historical network states with timestamps and status. Use to view configuration history and find specific snapshots for queries. Supports pagination (limit/offset) and memory storage for large datasets.",
-		s.listSnapshots)
+		(*ForwardMCPService).listSnapshots)
 
-	addTool(server, "get_latest_snapshot",
+	addTool(r, s, "get_latest_snapshot",
 		"Get the latest processed snapshot for a network. Requires network_id. Returns the most recent network state. Use to ensure queries run against current configuration.",
-		s.getLatestSnapshot)
+		(*ForwardMCPService).getLatestSnapshot)
 
-	addTool(server, "delete_snapshot",
+	addTool(r, s, "delete_snapshot",
 		"Delete a network snapshot. Requires snapshot_id. WARNING: This permanently removes the snapshot and associated historical data. Use with caution for cleanup of old snapshots.",
-		s.deleteSnapshot)
+		(*ForwardMCPService).deleteSnapshot)
 
 	// Location Management Tools
-	addTool(server, "list_locations",
+	addTool(r, s, "list_locations",
 		"List locations in a network. Requires network_id. Returns physical locations with names and coordinates. Use to view network topology and organize devices by location. Supports pagination (limit/offset) and memory storage for large datasets. Default limit is 25 to prevent token overflow.",
-		s.listLocations)
+		(*ForwardMCPService).listLocations)
 
-	addTool(server, "create_location",
+	addTool(r, s, "create_location",
 		"Create a new location in a network. Requires network_id, location name, latitude, and longitude. Optional city, adminDivision, and country. Use to set up new sites or data centers for device organization.",
-		s.createLocation)
+		(*ForwardMCPService).createLocation)
 
-	addTool(server, "update_location",
+	addTool(r, s, "update_location",
 		"Update an existing location in a network. Requires network_id and location_id. Optional new name, description, latitude, and longitude. Use to modify location details.",
-		s.updateLocation)
+		(*ForwardMCPService).updateLocation)
 
-	addTool(server, "delete_location",
+	addTool(r, s, "delete_location",
 		"Delete a location from a network. Requires network_id and location_id. Use to remove locations that are no longer needed.",
-		s.deleteLocation)
+		(*ForwardMCPService).deleteLocation)
 
-	addTool(server, "create_locations_bulk",
+	addTool(r, s, "create_locations_bulk",
 		"Create or update multiple network locations in a single operation. Requires network_id and an array of locations. Uses PATCH /api/networks/{networkId}/locations. Locations with existing IDs will be updated, others will be created.",
-		s.createLocationsBulk)
+		(*ForwardMCPService).createLocationsBulk)
 
-	addTool(server, "update_device_locations",
+	addTool(r, s, "update_device_locations",
 		"Update device location assignments in bulk. Requires network_id and a map of device IDs to location IDs. Use to assign multiple devices to their physical locations efficiently. Note: Cloud devices (CSR1KV, PAN-FW, etc.) cannot be moved to physical locations.",
-		s.updateDeviceLocations)
+		(*ForwardMCPService).updateDeviceLocations)
 
 	// Default Settings Management Tools
-	addTool(server, "get_default_settings",
+	addTool(r, s, "get_default_settings",
 		"View current default settings for network operations. Shows the default network ID, snapshot ID, and query limits configured for this session.",
-		s.getDefaultSettings)
+		(*ForwardMCPService).getDefaultSettings)
 
-	addTool(server, "set_default_network",
+	addTool(r, s, "set_default_network",
 		"Set the default network for all operations. Accepts either a network ID or network name. This will be used when network_id is not specified in other tools.",
-		s.setDefaultNetwork)
+		(*ForwardMCPService).setDefaultNetwork)
 
 	// Semantic Cache and AI Enhancement Tools
-	addTool(server, "get_cache_stats",
+	addTool(r, s, "get_cache_stats",
 		"View semantic cache performance statistics including hit rates, total queries, and cache efficiency metrics.",
-		s.getCacheStats)
+		(*ForwardMCPService).getCacheStats)
 
-	addTool(server, "suggest_similar_queries",
+	addTool(r, s, "suggest_similar_queries",
 		"Get suggestions for similar NQE queries based on semantic similarity to your query intent. Helps discover relevant existing queries.",
-		s.suggestSimilarQueries)
+		(*ForwardMCPService).suggestSimilarQueries)
 
-	addTool(server, "clear_cache",
+	addTool(r, s, "clear_cache",
 		"Clear expired entries from the semantic cache to free up memory and improve performance.",
-		s.clearCache)
+		(*ForwardMCPService).clearCache)
 
 	// AI-Powered Query Discovery Tools
-	addTool(server, "search_nqe_queries",
+	addTool(r, s, "search_nqe_queries",
 		"🧠 **AI-POWERED SEARCH**: Find relevant NQE queries using natural language.\n\nAI-powered search through 6000+ predefined NQE queries using natural language. Describe what you want to analyze and get relevant query suggestions.\n\n**Best Practices:**\n- Be specific and descriptive in your query\n- Use examples like 'AWS security issues', 'BGP routing problems'\n- Avoid vague terms like 'network' or 'config'\n- Use category filters to narrow results\n\n**Example Queries:**\n- 'show me AWS security vulnerabilities'\n- 'find BGP routing issues'\n- 'check interface utilization'\n- 'devices with high CPU usage'\n\n**Note:** For executable queries, use find_executable_query instead.",
-		s.searchNQEQueries)
+		(*ForwardMCPService).searchNQEQueries)
 
 	// Bulk location setup workflow (guides bulk upsert using PATCH)
 	server.AddPrompt(&mcp.Prompt{
@@ -657,107 +689,110 @@ func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
 		return promptResult("Bulk Location Setup", newTextContent(content)), nil
 	})
 
-	addTool(server, "initialize_query_index",
+	addTool(r, s, "initialize_query_index",
 		"Initialize or rebuild the AI-powered NQE query index from the spec file. REQUIRED before using search_nqe_queries or find_executable_query. Run this once at startup or when you get 'query index is empty' errors. Can generate embeddings for semantic search if OpenAI API key is available.",
-		s.initializeQueryIndex)
+		(*ForwardMCPService).initializeQueryIndex)
 
 	// Database Hydration Tools
-	addTool(server, "hydrate_database",
+	addTool(r, s, "hydrate_database",
 		"Report how stale the NQE query database is and get the CLI command to refresh it. Hydration runs out-of-process (`forward-mcp-server hydrate`) so client restarts cannot interrupt it; after running the command, call refresh_query_index to pick up the new data.",
-		s.hydrateDatabase)
+		(*ForwardMCPService).hydrateDatabase)
 
-	addTool(server, "refresh_query_index",
+	addTool(r, s, "refresh_query_index",
 		"Refresh the query index from the current database content. Use this after hydrating the database to ensure the search index reflects the latest data.",
-		s.refreshQueryIndex)
+		(*ForwardMCPService).refreshQueryIndex)
 
-	addTool(server, "get_database_status",
+	addTool(r, s, "get_database_status",
 		"Get the current status of the database and query index including query counts, last update times, and performance metrics.",
-		s.getDatabaseStatus)
+		(*ForwardMCPService).getDatabaseStatus)
 
 	// Memory Management Tools
-	addTool(server, "create_entity",
+	addTool(r, s, "create_entity",
 		"Create a new entity in the knowledge graph memory system. Entities represent people, networks, devices, projects, or any other important concept to remember.",
-		s.createEntity)
+		(*ForwardMCPService).createEntity)
 
-	addTool(server, "create_relation",
+	addTool(r, s, "create_relation",
 		"Create a relation between two entities in the knowledge graph. Relations represent how entities are connected (e.g., 'owns', 'manages', 'depends_on').",
-		s.createRelation)
+		(*ForwardMCPService).createRelation)
 
-	addTool(server, "add_observation",
+	addTool(r, s, "add_observation",
 		"Add an observation to an entity. Observations are additional facts, notes, preferences, or behaviors associated with an entity.",
-		s.addObservation)
+		(*ForwardMCPService).addObservation)
 
-	addTool(server, "search_entities",
+	addTool(r, s, "search_entities",
 		"Search for entities in the knowledge graph by name, type, or observation content. Use this to find information you've stored about people, networks, or concepts.",
-		s.searchEntities)
+		(*ForwardMCPService).searchEntities)
 
-	addTool(server, "get_entity",
+	addTool(r, s, "get_entity",
 		"Retrieve a specific entity by ID or name. Use this to get detailed information about a specific person, network, device, or concept.",
-		s.getEntity)
+		(*ForwardMCPService).getEntity)
 
-	addTool(server, "get_relations",
+	addTool(r, s, "get_relations",
 		"Get all relations for a specific entity. Use this to understand how an entity is connected to others in the knowledge graph.",
-		s.getRelations)
+		(*ForwardMCPService).getRelations)
 
-	addTool(server, "get_observations",
+	addTool(r, s, "get_observations",
 		"Get all observations for a specific entity. Use this to retrieve all stored facts, notes, and preferences about an entity.",
-		s.getObservations)
+		(*ForwardMCPService).getObservations)
 
-	addTool(server, "delete_entity",
+	addTool(r, s, "delete_entity",
 		"Delete an entity and all its relations and observations. Use with caution as this permanently removes all stored information about the entity.",
-		s.deleteEntity)
+		(*ForwardMCPService).deleteEntity)
 
-	addTool(server, "delete_relation",
+	addTool(r, s, "delete_relation",
 		"Delete a specific relation between entities. Use this to remove connections that are no longer relevant.",
-		s.deleteRelation)
+		(*ForwardMCPService).deleteRelation)
 
-	addTool(server, "delete_observation",
+	addTool(r, s, "delete_observation",
 		"Delete a specific observation from an entity. Use this to remove outdated or incorrect information.",
-		s.deleteObservation)
+		(*ForwardMCPService).deleteObservation)
 
-	addTool(server, "get_memory_stats",
+	addTool(r, s, "get_memory_stats",
 		"Get statistics about the memory system including counts of entities, relations, and observations by type.",
-		s.getMemoryStats)
+		(*ForwardMCPService).getMemoryStats)
 
 	// API Analytics Tools
-	addTool(server, "get_query_analytics",
+	addTool(r, s, "get_query_analytics",
 		"Get analytics about query patterns and performance for a specific network. Shows query counts, execution times, result patterns, and usage trends from the memory system.",
-		s.getQueryAnalytics)
+		(*ForwardMCPService).getQueryAnalytics)
 
 	// Instance Management Tools
-	addTool(server, "list_instance_ids",
+	addTool(r, s, "list_instance_ids",
 		"List all available Forward Networks instance IDs in the database. Shows instance IDs with query counts and sync dates. Use this to find the correct instance ID to configure in FORWARD_INSTANCE_ID environment variable.",
-		s.listInstanceIDs)
+		(*ForwardMCPService).listInstanceIDs)
 
 	// Tool handler for get_nqe_result_chunks
-	addTool(server, "get_nqe_result_chunks",
+	addTool(r, s, "get_nqe_result_chunks",
 		"Retrieve chunked NQE query results from the memory system. Provide either entity_id or (query_id, network_id, snapshot_id). Optionally, specify chunk_index to fetch a single chunk.",
-		s.getNQEResultChunks)
+		(*ForwardMCPService).getNQEResultChunks)
 
 	// Add get_nqe_result_summary tool handler
-	addTool(server, "get_nqe_result_summary",
+	addTool(r, s, "get_nqe_result_summary",
 		"Get a summary of a stored NQE result (row count, columns, preview rows) by entity_id or (query_id, network_id, snapshot_id).",
-		s.getNQEResultSummary)
+		(*ForwardMCPService).getNQEResultSummary)
 
 	// Add analyze_nqe_result_sql tool handler
-	addTool(server, "analyze_nqe_result_sql",
+	addTool(r, s, "analyze_nqe_result_sql",
 		"Run a SQL query on a stored NQE result (by entity_id). Example: SELECT COUNT(*) FROM nqe_result;",
-		s.analyzeNQEResultSQL)
+		(*ForwardMCPService).analyzeNQEResultSQL)
 
 	// Add bloom search tool handlers
-	addTool(server, "build_bloom_filter",
+	addTool(r, s, "build_bloom_filter",
 		"Build a bloom filter from NQE query results for efficient large dataset searching",
-		s.buildBloomFilter)
+		(*ForwardMCPService).buildBloomFilter)
 
-	addTool(server, "search_bloom_filter",
+	addTool(r, s, "search_bloom_filter",
 		"Search a bloom filter for matching items with sub-millisecond performance",
-		s.searchBloomFilter)
+		(*ForwardMCPService).searchBloomFilter)
 
-	addTool(server, "get_bloom_filter_stats",
+	addTool(r, s, "get_bloom_filter_stats",
 		"Get statistics and performance metrics for all bloom filters",
-		s.getBloomFilterStats)
+		(*ForwardMCPService).getBloomFilterStats)
 
-	return nil
+	// Certified NQE library tools (M1a)
+	s.registerCertifiedTools(r)
+
+	return r.Err()
 }
 
 // addWorkflowPrompt registers an interactive workflow prompt whose single
@@ -1382,21 +1417,36 @@ func (s *ForwardMCPService) searchPathsBulk(args SearchPathsBulkArgs) (*mcp.Call
 	networkID := s.getNetworkID(args.NetworkID)
 	snapshotID := s.getSnapshotID(args.SnapshotID)
 
-	// Note: snapshotId is optional for bulk API - if omitted, the network's latest processed Snapshot is used
-	// We only fetch it if explicitly requested
-	if snapshotID == "latest" {
+	// snapshotId is optional for the bulk API (it defaults to the latest
+	// processed snapshot), but every answer must cite a concrete snapshot id
+	// (spec non-negotiable #3), so resolve "latest" and "" up front. When the
+	// caller omitted it, the resolved id is used for the evidence line only:
+	// the API call still lets Forward pick the latest snapshot as before.
+	resolvedForEvidence := snapshotID
+	if snapshotID == "latest" || snapshotID == "" {
+		explicit := snapshotID == "latest"
 		s.logger.Info("searchPathsBulk - Latest snapshot requested, fetching for network %s", networkID)
 		snapshot, err := s.forwardClient.GetLatestSnapshot(networkID)
-		if err != nil {
+		switch {
+		case err != nil && explicit:
 			s.logger.Error("Failed to fetch latest snapshot for network %s: %v", networkID, err)
 			return nil, fmt.Errorf("failed to get latest snapshot for network %s: %w", networkID, err)
-		}
-		if snapshot != nil && snapshot.ID != "" {
-			snapshotID = snapshot.ID
-			s.logger.Info("searchPathsBulk - Using latest snapshot ID: %s", snapshotID)
-		} else {
+		case err != nil:
+			// Caller omitted the snapshot: keep 3.0.0 behaviour (Forward picks
+			// latest) and cite "latest-unresolved" so the gap is visible.
+			s.logger.Warn("Could not resolve latest snapshot for evidence on network %s: %v", networkID, err)
+			resolvedForEvidence = "latest-unresolved"
+		case snapshot != nil && snapshot.ID != "":
+			resolvedForEvidence = snapshot.ID
+			if explicit {
+				snapshotID = snapshot.ID
+			}
+			s.logger.Info("searchPathsBulk - Using latest snapshot ID: %s", resolvedForEvidence)
+		case explicit:
 			s.logger.Warn("No valid snapshot found for network %s", networkID)
 			return nil, fmt.Errorf("no valid snapshot found for network %s - ensure the network has been processed", networkID)
+		default:
+			resolvedForEvidence = "latest-unresolved"
 		}
 	}
 
@@ -1562,8 +1612,19 @@ func (s *ForwardMCPService) searchPathsBulk(args SearchPathsBulkArgs) (*mcp.Call
 
 	result := MarshalCompactJSONString(responses)
 
-	return newToolResponse(newTextContent(fmt.Sprintf("Bulk path search completed. %d/%d queries successful, found %d total paths:%s\n%s",
-		successfulQueries, len(args.Queries), totalPaths, debugInfo, result))), nil
+	// Evidence envelope per query (1a.7): one line each so an agent can cite
+	// the exact path search and snapshot behind every reachability claim.
+	evidence := ""
+	for _, q := range args.Queries {
+		src := q.SrcIP
+		if src == "" {
+			src = q.From
+		}
+		evidence += evidenceLine(usecases.PathSearchEvidence(src, q.DstIP, resolvedForEvidence))
+	}
+
+	return newToolResponse(newTextContent(fmt.Sprintf("Bulk path search completed. %d/%d queries successful, found %d total paths:%s\n%s\n%s",
+		successfulQueries, len(args.Queries), totalPaths, debugInfo, result, evidence))), nil
 }
 
 // Helper function to convert service NQEQueryOptions to forward NQEQueryOptions
@@ -1720,6 +1781,7 @@ func (s *ForwardMCPService) runNQEQueryByID(args RunNQEQueryByIDArgs) (*mcp.Call
 			response += fmt.Sprintf("Stored in memory system as entity: %s\n", entityID)
 			response += "You can use get_nqe_result_summary to analyze this result locally.\n"
 		}
+		response += evidenceLine(usecases.AdhocNQEEvidence(args.QueryID, lastResult.SnapshotID))
 		return newToolResponse(newTextContent(response)), nil
 	}
 
@@ -1741,9 +1803,10 @@ func (s *ForwardMCPService) runNQEQueryByID(args RunNQEQueryByIDArgs) (*mcp.Call
 
 	// Try to get result from cache first
 	if s.config.Forward.SemanticCache.Enabled && s.semanticCache != nil {
-		if cachedResult, found := s.semanticCache.Get(cacheKey, networkID, snapshotID); found {
+		if cachedResult, found := s.cache().Get(cacheKey, networkID, snapshotID); found {
 			s.logger.Debug("Cache hit for NQE query %s", args.QueryID)
-			return newToolResponse(newTextContent(MarshalCompactJSONString(cachedResult))), nil
+			return newToolResponse(newTextContent(MarshalCompactJSONString(cachedResult) +
+				evidenceLine(usecases.AdhocNQEEvidence(args.QueryID, cachedResult.SnapshotID)))), nil
 		}
 	}
 
@@ -1841,7 +1904,7 @@ func (s *ForwardMCPService) runNQEQueryByID(args RunNQEQueryByIDArgs) (*mcp.Call
 
 	// Store result in cache for future use
 	if s.config.Forward.SemanticCache.Enabled && s.semanticCache != nil {
-		if cacheErr := s.semanticCache.Put(cacheKey, networkID, snapshotID, result); cacheErr != nil {
+		if cacheErr := s.cache().Put(cacheKey, networkID, snapshotID, result); cacheErr != nil {
 			s.logger.Warn("Failed to cache NQE query result for %s: %v", args.QueryID, cacheErr)
 		} else {
 			s.logger.Debug("Cached result for NQE query %s (items: %d)", args.QueryID, len(result.Items))
@@ -1851,7 +1914,9 @@ func (s *ForwardMCPService) runNQEQueryByID(args RunNQEQueryByIDArgs) (*mcp.Call
 	resultJSON := MarshalCompactJSONString(result)
 	s.logger.Debug("NQE query completed with %d items", len(result.Items))
 
-	response := fmt.Sprintf("NQE query completed. Found %d items:\n%s\n\n", len(result.Items), resultJSON)
+	response := fmt.Sprintf("NQE query completed. Found %d items:\n%s\n", len(result.Items), resultJSON)
+	// Ad-hoc library runs are uncertified (1a.6); cite the snapshot Forward reports.
+	response += evidenceLine(usecases.AdhocNQEEvidence(args.QueryID, result.SnapshotID)) + "\n"
 
 	// Pagination warning if results may be truncated
 	if params.Options != nil && len(result.Items) == params.Options.Limit {
@@ -2800,7 +2865,7 @@ func (s *ForwardMCPService) setDefaultNetwork(args SetDefaultNetworkArgs) (*mcp.
 func (s *ForwardMCPService) getCacheStats(args GetCacheStatsArgs) (*mcp.CallToolResult, error) {
 	s.logToolCall("get_cache_stats", args, nil)
 
-	stats := s.semanticCache.GetStats()
+	stats := s.cache().GetStats()
 
 	statsJSON := MarshalCompactJSONString(stats)
 
@@ -2826,7 +2891,7 @@ func (s *ForwardMCPService) suggestSimilarQueries(args SuggestSimilarQueriesArgs
 		limit = 5
 	}
 
-	similarQueries, err := s.semanticCache.FindSimilarQueries(args.Query, limit)
+	similarQueries, err := s.cache().FindSimilarQueries(args.Query, limit)
 	if err != nil {
 		return nil, fmt.Errorf("failed to find similar queries: %w", err)
 	}
@@ -2863,7 +2928,7 @@ func (s *ForwardMCPService) clearCache(args ClearCacheArgs) (*mcp.CallToolResult
 	if args.ClearAll {
 		// For simplicity, we'll implement a full clear by creating a new cache
 		// In production, you might want a more sophisticated approach
-		stats := s.semanticCache.GetStats()
+		stats := s.cache().GetStats()
 		totalEntries := stats["total_entries"].(int)
 
 		// Reinitialize the cache
@@ -2884,14 +2949,14 @@ func (s *ForwardMCPService) clearCache(args ClearCacheArgs) (*mcp.CallToolResult
 		removed = totalEntries
 		operation = "Cleared all cache entries"
 	} else {
-		removed = s.semanticCache.ClearExpired()
+		removed = s.cache().ClearExpired()
 		operation = "Cleared expired cache entries"
 	}
 
 	response := fmt.Sprintf("%s: %d entries removed\n\n", operation, removed)
 
 	// Show updated stats
-	newStats := s.semanticCache.GetStats()
+	newStats := s.cache().GetStats()
 	response += "Updated cache status:\n"
 	response += fmt.Sprintf("• Active entries: %v\n", newStats["total_entries"])
 	response += fmt.Sprintf("• Hit rate: %v\n", newStats["hit_rate_percent"])

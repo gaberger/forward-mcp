@@ -1,0 +1,30 @@
+{
+  "id": "device-basic-info",
+  "version": 1,
+  "title": "Device basic info",
+  "intent": "Inventory of every device in the snapshot: name, vendor, platform, OS version, model and management IP.",
+  "synonyms": [
+    "device inventory",
+    "list all devices",
+    "what devices are in the network",
+    "device platforms and OS versions",
+    "management IPs"
+  ],
+  "parameters": [],
+  "output_schema": {
+    "type": "object",
+    "required": ["name"],
+    "properties": {
+      "name": {"type": "string"},
+      "vendor": {"type": "string"},
+      "platform": {"type": "string"},
+      "osVersion": {"type": "string"},
+      "model": {"type": "string"},
+      "managementIp": {"type": ["string", "null"]}
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": true,
+  "source": {"nqe_query_id": "FQ_ac651cb2901b067fe7dbfb511613ab44776d8029", "repository": "fwd"},
+  "fixture": "device-basic-info.v1.json"
+}

@@ -70,6 +70,19 @@ type MemorySystem struct {
 	instanceID string
 }
 
+// ForInstance returns a view of the same database scoped to another
+// instance id. Every statement in this file filters on instance_id, so the
+// view can neither read nor modify rows outside its partition. The
+// underlying *sql.DB is shared; only the owner (the original) closes it.
+func (m *MemorySystem) ForInstance(instanceID string) *MemorySystem {
+	if m == nil || instanceID == m.instanceID {
+		return m
+	}
+	view := *m
+	view.instanceID = instanceID
+	return &view
+}
+
 // NewMemorySystem creates a new memory system instance
 func NewMemorySystem(logger *logger.Logger, instanceID string) (*MemorySystem, error) {
 	// Use same data directory approach as NQE database

@@ -593,6 +593,8 @@ func createTestService() *ForwardMCPService {
 	}
 
 	// Certified library from the repo (tests run from internal/service).
+	// Ranking needs real (keyword) embeddings; the mock returns noise.
+	service.embeddingService = NewKeywordEmbeddingService()
 	service.initCertified("../../spec/certified")
 
 	return service

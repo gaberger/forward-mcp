@@ -1,0 +1,39 @@
+{
+  "id": "vty-non-ssh-access",
+  "version": 1,
+  "title": "VTY lines allowing non-SSH protocols (Cisco)",
+  "intent": "Cisco devices whose VTY lines accept telnet or other non-SSH transports, a management-plane security violation.",
+  "synonyms": [
+    "telnet enabled",
+    "vty allows telnet",
+    "transport input not ssh",
+    "insecure management access",
+    "devices with telnet"
+  ],
+  "parameters": [],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "device",
+      "line"
+    ],
+    "properties": {
+      "device": {
+        "type": "string"
+      },
+      "line": {
+        "type": "string"
+      },
+      "transportInput": {
+        "type": "string"
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_a4638eff5974d15298d7596cbf76d7f421247e38",
+    "repository": "fwd"
+  },
+  "fixture": "vty-non-ssh-access.v1.json"
+}

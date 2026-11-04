@@ -1,0 +1,10 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "device": "access-2",
+      "line": "vty 0 4",
+      "transportInput": "all"
+    }
+  ]
+}

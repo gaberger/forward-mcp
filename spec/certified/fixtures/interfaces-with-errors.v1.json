@@ -1,0 +1,11 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "device": "access-1",
+      "interface": "GigabitEthernet1/0/12",
+      "status": "err-disabled",
+      "reason": "bpduguard"
+    }
+  ]
+}

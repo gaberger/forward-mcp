@@ -1,0 +1,21 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "device": "leaf-1",
+      "interface": "Ethernet3",
+      "adminStatus": "UP",
+      "operStatus": "DOWN",
+      "speed": 10000,
+      "description": "to spine-2"
+    },
+    {
+      "device": "leaf-2",
+      "interface": "Ethernet7",
+      "adminStatus": "DOWN",
+      "operStatus": "DOWN",
+      "speed": 1000,
+      "description": ""
+    }
+  ]
+}

@@ -1,0 +1,58 @@
+{
+  "id": "link-speed-consistency",
+  "version": 1,
+  "title": "Link speed consistency",
+  "intent": "Links whose two ends are configured with different speeds or duplex, a common cause of flapping and errors.",
+  "synonyms": [
+    "speed mismatch",
+    "duplex mismatch",
+    "speed duplex inconsistent",
+    "half duplex link",
+    "link speed different each side"
+  ],
+  "parameters": [],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "deviceA",
+      "interfaceA",
+      "speedA",
+      "deviceB",
+      "interfaceB",
+      "speedB"
+    ],
+    "properties": {
+      "deviceA": {
+        "type": "string"
+      },
+      "interfaceA": {
+        "type": "string"
+      },
+      "speedA": {
+        "type": [
+          "integer",
+          "string"
+        ]
+      },
+      "deviceB": {
+        "type": "string"
+      },
+      "interfaceB": {
+        "type": "string"
+      },
+      "speedB": {
+        "type": [
+          "integer",
+          "string"
+        ]
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_a811a4336a4341f80502db30826b94d08f538d6e",
+    "repository": "fwd"
+  },
+  "fixture": "link-speed-consistency.v1.json"
+}

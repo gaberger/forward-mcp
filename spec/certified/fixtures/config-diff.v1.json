@@ -1,0 +1,13 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "device": "leaf-1",
+      "added": [
+        "interface Ethernet3",
+        "  shutdown"
+      ],
+      "removed": []
+    }
+  ]
+}

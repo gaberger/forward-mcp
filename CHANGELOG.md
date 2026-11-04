@@ -120,6 +120,7 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - Memory graph, API tracker and bloom filters/indexes use the caller's partition id (`<instance>-<sha256(subject)[:16]>`) in place of the instance id; `MemorySystem.ForInstance` views share one SQLite handle
   - Tool handlers run on a caller-scoped service view (`forCaller`), registered as method expressions, so no handler needed rewriting; stdio keeps the unpartitioned service and its existing data
   - `isolation_test.go`: cross-identity read/match/delete attempts on cache, memory graph and bloom filters all fail
+- **JWT identity verifier** (netorch M1c.1): `FORWARD_REMOTE_AUTH=jwt` verifies RS/PS/ES-signed bearer tokens (HS256 only with an explicit lab secret) for issuer, audience and expiry via `golang-jwt/jwt/v5`; keys from a JWKS URL (cached, rotation-aware), a PEM file, or a secret. Claims `sub`, `scope`/`scopes`, `network_ids` map to the caller. New top-level dependency: `github.com/golang-jwt/jwt/v5`
 - **Network allow-list, rate limit, log redaction** (netorch M1c.5–1c.7)
   - A caller with network ids is denied Forward-bound tools for other networks and must name a network explicitly
   - Per-subject token-bucket rate limit (`FORWARD_REMOTE_RATE_LIMIT_PER_MIN`, `_BURST`)

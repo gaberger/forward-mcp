@@ -29,7 +29,8 @@ type Registrar struct {
 	server   *mcp.Server
 	exposure *usecases.ToolExposure
 	audit    ports.AuditLogger
-	limiter  ports.RateLimiter // optional; nil = unlimited
+	limiter  ports.RateLimiter    // optional; nil = unlimited
+	redactor ports.OutputRedactor // optional; nil = results pass through
 
 	mu         sync.Mutex
 	registered []string
@@ -47,6 +48,13 @@ func NewRegistrar(server *mcp.Server, exposure *usecases.ToolExposure, audit por
 // tool error naming the limit; propose calls are audited as denied.
 func (r *Registrar) WithRateLimiter(l ports.RateLimiter) *Registrar {
 	r.limiter = l
+	return r
+}
+
+// WithOutputRedactor scrubs every tool result (text content and error
+// messages) before it is returned. Both composition roots set it.
+func (r *Registrar) WithOutputRedactor(red ports.OutputRedactor) *Registrar {
+	r.redactor = red
 	return r
 }
 
@@ -103,6 +111,7 @@ func AddTool[In any](r *Registrar, name, description string, h Handler[In]) {
 	policy := r.exposure.Policy
 	audit := r.audit
 	limiter := r.limiter
+	redactor := r.redactor
 
 	mcp.AddTool(r.server, &mcp.Tool{
 		Name:        name,
@@ -127,10 +136,12 @@ func AddTool[In any](r *Registrar, name, description string, h Handler[In]) {
 		}
 		if spec.Class != entities.ToolClassPropose {
 			res, err := h(ctx, in)
+			res, err = scrub(redactor, res, err)
 			return res, nil, err
 		}
 		start := time.Now()
 		res, err := h(ctx, in)
+		res, err = scrub(redactor, res, err)
 		if audit != nil {
 			outcome, msg := entities.AuditOutcomeOK, ""
 			if err != nil {
@@ -276,4 +287,27 @@ func hasNetworkIDField(in any) bool {
 		}
 	}
 	return false
+}
+
+// scrub applies the output redactor to a handler's result and error. Text
+// content is rewritten in place; other content types (images, resource
+// links) carry no device text and pass through.
+func scrub(red ports.OutputRedactor, res *mcp.CallToolResult, err error) (*mcp.CallToolResult, error) {
+	if red == nil {
+		return res, err
+	}
+	if err != nil {
+		if msg, n := red.Redact(err.Error()); n > 0 {
+			err = errors.New(msg)
+		}
+	}
+	if res == nil {
+		return res, err
+	}
+	for _, c := range res.Content {
+		if tc, ok := c.(*mcp.TextContent); ok {
+			tc.Text, _ = red.Redact(tc.Text)
+		}
+	}
+	return res, err
 }

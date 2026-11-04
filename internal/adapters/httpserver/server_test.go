@@ -2,6 +2,7 @@ package httpserver
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -15,6 +16,7 @@ import (
 	mcpadapter "github.com/forward-mcp/internal/adapters/mcp"
 	"github.com/forward-mcp/internal/domain/entities"
 	"github.com/forward-mcp/internal/domain/services/ratelimit"
+	"github.com/forward-mcp/internal/domain/services/redact"
 	"github.com/forward-mcp/internal/domain/services/toolpolicy"
 	"github.com/forward-mcp/internal/ports"
 	"github.com/forward-mcp/internal/usecases"
@@ -46,11 +48,12 @@ func newTestServerWithTokens(t *testing.T, propose bool, tokens string) (*httpte
 		{Name: "predict_create_change_set", Class: entities.ToolClassPropose, Target: entities.ToolTargetForward},
 		{Name: "delete_snapshot", Class: entities.ToolClassWrite, Target: entities.ToolTargetForward},
 		{Name: "list_devices", Class: entities.ToolClassRead, Target: entities.ToolTargetForward},
+		{Name: "search_configs", Class: entities.ToolClassRead, Target: entities.ToolTargetForward},
 	})
 	exposure := &usecases.ToolExposure{Registry: catalog, Policy: toolpolicy.Remote(propose)}
 	sink := &captureSink{}
 	srv := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	r := mcpadapter.NewRegistrar(srv, exposure, auditlog.New(sink)).WithRateLimiter(ratelimit.New(6000, 20))
+	r := mcpadapter.NewRegistrar(srv, exposure, auditlog.New(sink)).WithRateLimiter(ratelimit.New(6000, 20)).WithOutputRedactor(redact.ConfigRedactor{})
 	mcpadapter.AddTool(r, "whoami", "who am I", func(ctx context.Context, _ whoArgs) (*mcp.CallToolResult, error) {
 		c := ports.CallerFromContext(ctx)
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: c.Subject + "|" + strings.Join(c.Scopes, ",")}}}, nil
@@ -60,6 +63,9 @@ func newTestServerWithTokens(t *testing.T, propose bool, tokens string) (*httpte
 	})
 	mcpadapter.AddTool(r, "list_devices", "read, network-bound", func(_ context.Context, a echoArgs) (*mcp.CallToolResult, error) {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "devices-of-" + a.NetworkID}}}, nil
+	})
+	mcpadapter.AddTool(r, "search_configs", "returns device config", func(context.Context, whoArgs) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: `{"device":"core-1","config":"hostname core-1\nsnmp-server community pubC0mm RO\nenable secret 5 $1$mERr$hx5rVt7rPNoS4wqbXKX7m0\ninterface Ethernet1\n"}`}}}, nil
 	})
 	mcpadapter.AddTool(r, "delete_snapshot", "write", func(context.Context, echoArgs) (*mcp.CallToolResult, error) {
 		t.Fatal("write tool handler must never run in remote mode")
@@ -141,7 +147,7 @@ func TestRemoteListsOnlyReadToolsByDefault(t *testing.T) {
 	for _, tl := range tools.Tools {
 		names = append(names, tl.Name)
 	}
-	if strings.Join(names, ",") != "list_devices,whoami" {
+	if strings.Join(names, ",") != "list_devices,search_configs,whoami" {
 		t.Errorf("expected only read tools, got %v", names)
 	}
 }
@@ -238,5 +244,29 @@ func TestRateLimitPerSubject(t *testing.T) {
 	a := connect(t, ts, "agent-token-0123456789")
 	if res, err := a.CallTool(context.Background(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}}); err != nil || res.IsError {
 		t.Fatalf("other subject must not be limited: %v %+v", err, res)
+	}
+}
+
+// Non-negotiable #4 end to end: a tool returning device config must reach
+// the MCP client (and so the model) with its secrets already removed.
+func TestToolOutputIsRedactedBeforeTheClient(t *testing.T) {
+	ts, _ := newTestServer(t, false)
+	c := connect(t, ts, "plain-token-0123456789")
+	res, err := c.CallTool(context.Background(), &mcp.CallToolParams{Name: "search_configs", Arguments: map[string]any{}})
+	if err != nil || res.IsError {
+		t.Fatalf("%v %+v", err, res)
+	}
+	text := res.Content[0].(*mcp.TextContent).Text
+	for _, secret := range []string{"pubC0mm", "$1$mERr"} {
+		if strings.Contains(text, secret) {
+			t.Errorf("secret %q reached the client: %s", secret, text)
+		}
+	}
+	if !strings.Contains(text, "<redacted:snmp-community>") || !strings.Contains(text, "interface Ethernet1") {
+		t.Errorf("unexpected result: %s", text)
+	}
+	var back map[string]any
+	if err := json.Unmarshal([]byte(text), &back); err != nil {
+		t.Errorf("result is no longer valid JSON: %v", err)
 	}
 }

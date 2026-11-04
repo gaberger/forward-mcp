@@ -100,6 +100,8 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - Average response time is now updated lock-free (CAS on float bits) instead of an unsynchronised read-modify-write in `GetFor`
   - `findBestMatch` takes the read lock while walking the embedding index and returns the similarity instead of writing it onto the shared entry
   - `GetStats` takes the write lock because it updates the metrics struct
+### Security
+- **Tool output redaction** (spec non-negotiable #4): every tool result, in remote and stdio mode, now passes through `redact.ConfigRedactor` at the Registrar before it reaches the client and the model. Device-config secrets are replaced with `<redacted:KIND>`: enable/user/line passwords and secrets, SNMP communities and v3 auth/priv keys, TACACS/RADIUS keys, OSPF/BGP/NTP authentication keys, key-strings, IKE and Wi-Fi pre-shared keys, Junos `encrypted-password` and `$9$` values, PAN-OS `<password>`/`<phash>`, crypt hashes and PEM private keys. Works on raw config and on config inside JSON (including Go's `\u003c` escaping) and keeps JSON valid. BGP communities, interfaces and addresses are untouched. Gated by fixtures, a 1,000-case property test and an end-to-end HTTP test.
 
 ### Added
 - **Tool classes and serve-mode policy** (netorch M1.0, see `PLAN.md`)
@@ -110,6 +112,7 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - New hex-architecture packages per ADR-001: `domain/entities` (ToolClass, Caller, AuditEvent), `ports` (ToolRegistry, ToolPolicy, AuditLogger, IdentityVerifier), `usecases` (ToolExposure), `adapters/mcp`, `adapters/auditlog`
 - **Certified NQE library, schema and loader** (netorch M1a.1)
   - `spec/certified/`: versioned library (`VERSION`, `queries/<id>.json`, `fixtures/`) with three seed entries
+  - Library 0.2.0: 14 further entries drawn from the Forward NQE library (interface status/errors, MTU/speed/VLAN consistency, CDP/LLDP neighbors and discovery gaps, hardware inventory and support status, CVE exposure, VTY non-SSH access, VRF route leaking, duplicate IPs, config diff). Shipped `certified: false` until their output columns are reviewed against a live instance; results carry `certified:false` meanwhile
   - `domain/entities.CertifiedQuery` / `Evidence`; `domain/services/certified` validation rules (every problem reported with file and field; `certified:true` requires owner, fixture and output schema)
   - `adapters/certifiedfs` loads any `fs.FS`; golden test proves the checked-in library always loads
   - Tools `search_certified_queries`, `check_answerable`, `run_certified_query` (read class) backed by `usecases.CertifiedQueries`; ranking reuses the configured embedding provider plus verbatim synonym boosts; parameters validated against the entry; output shape drift reported as warnings (M1a.3–1a.5)
@@ -132,6 +135,10 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - Per-subject token-bucket rate limit (`FORWARD_REMOTE_RATE_LIMIT_PER_MIN`, `_BURST`)
   - Every logger line, tool-call argument dump and error passes through `domain/services/redact` (JWTs, bearer/basic values, `key=value` secrets)
 - **Eval grader** (netorch E.1–E.2): `cmd/eval-grader` grades an agent answer against a replay case deterministically — every gold evidence item must be cited and must reproduce on re-run (row-set comparison with normalised keys, or path outcome); the verdict must match; uncited network facts are detected from explicit `facts` or from the summary heuristically. Re-run backends: live Forward (in-process, same certified library and client as the server; `-record` captures a fixture) or a recorded fixture for CI. Seed case, answer and recording under `cmd/eval-grader/testdata`; `make eval-grade-seed`
+- **Forward Predict tools** (netorch M1b, propose class, off by default)
+  - `predict_create_change_set`, `predict_stage_edits` (CLI or firewall rule edits; PAN-OS CLI rejected up front), `predict_run_and_wait` (commit → predict → poll), `predict_get_results` (connectivity diff polled past partial results, per-area counts, routing loops, check diffs, CVEs) with a three-valued verdict PASS / FAIL / UNKNOWN; `predict_gc` (write class, stdio only) deletes netorch-tagged change sets
+  - Every call is isolated behind `ports.PredictClient` (`adapters/predicthttp`) over a new raw-request port on the Forward client; change sets are bound to the caller that created them
+  - Contract test replays `testdata/roundtrip.json` by default and runs live with `FORWARD_LIVE=1` (`TestIntegrationPredictRoundTrip`), recording a fresh fixture; any departure from `docs/predict-endpoints.md` is a `DivergenceError` and is appended to `docs/predict-divergences.md`
 - **Predict HTTP contract**: `docs/predict-endpoints.md`, generated from the Forward Python SDK's unpublished OpenAPI by `scripts/gen-predict-endpoints`, with round-trip, wait and verdict semantics (netorch 1b.0)
 - **Instance Lock Protection**: Prevent multiple MCP server instances from running simultaneously
   - File-based locking mechanism using PID validation

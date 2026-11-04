@@ -1,0 +1,54 @@
+{
+  "id": "device-hardware",
+  "version": 1,
+  "title": "Device hardware inventory",
+  "intent": "Model, serial number, vendor and OS version for every device in the snapshot.",
+  "synonyms": [
+    "hardware inventory",
+    "serial numbers",
+    "device models",
+    "what hardware do we have",
+    "asset inventory",
+    "chassis serial"
+  ],
+  "parameters": [
+    {
+      "name": "device",
+      "type": "device",
+      "required": false,
+      "description": "Restrict to one device name; omit for the whole network."
+    }
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "device",
+      "vendor",
+      "model"
+    ],
+    "properties": {
+      "device": {
+        "type": "string"
+      },
+      "vendor": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "serialNumber": {
+        "type": "string"
+      },
+      "osVersion": {
+        "type": "string"
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_7ec4a8148b48a91271f342c512b2af1cdb276744",
+    "repository": "fwd"
+  },
+  "fixture": "device-hardware.v1.json"
+}

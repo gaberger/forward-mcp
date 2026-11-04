@@ -1,0 +1,50 @@
+{
+  "id": "vlan-consistency",
+  "version": 1,
+  "title": "VLAN consistency on trunks",
+  "intent": "Trunk links whose allowed VLAN sets differ between the two ends, so traffic on those VLANs is dropped at one side.",
+  "synonyms": [
+    "vlan mismatch on trunk",
+    "allowed vlans differ",
+    "trunk vlan inconsistent",
+    "vlan not allowed on other side",
+    "vlan pruning mismatch"
+  ],
+  "parameters": [],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "deviceA",
+      "interfaceA",
+      "deviceB",
+      "interfaceB"
+    ],
+    "properties": {
+      "deviceA": {
+        "type": "string"
+      },
+      "interfaceA": {
+        "type": "string"
+      },
+      "vlansA": {
+        "type": "string"
+      },
+      "deviceB": {
+        "type": "string"
+      },
+      "interfaceB": {
+        "type": "string"
+      },
+      "vlansB": {
+        "type": "string"
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_d885c4d4d82ea9d4fee7469bed2b66e1df77509e",
+    "repository": "fwd"
+  },
+  "fixture": "vlan-consistency.v1.json"
+}

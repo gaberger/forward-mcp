@@ -1,0 +1,47 @@
+{
+  "id": "uncollected-neighbors",
+  "version": 1,
+  "title": "Neighbors seen by CDP/LLDP but not collected",
+  "intent": "Devices that appear as CDP or LLDP neighbors but are not in the Forward snapshot, i.e. discovery gaps.",
+  "synonyms": [
+    "devices missing from forward",
+    "undiscovered devices",
+    "neighbors not collected",
+    "unknown neighbor",
+    "discovery gaps",
+    "devices not in snapshot"
+  ],
+  "parameters": [],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "device",
+      "interface",
+      "neighborName"
+    ],
+    "properties": {
+      "device": {
+        "type": "string"
+      },
+      "interface": {
+        "type": "string"
+      },
+      "neighborName": {
+        "type": "string"
+      },
+      "neighborAddress": {
+        "type": "string"
+      },
+      "platform": {
+        "type": "string"
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_733bd1f914a3fb0b066ca0ee900634a4d9e8d56b",
+    "repository": "fwd"
+  },
+  "fixture": "uncollected-neighbors.v1.json"
+}

@@ -18,6 +18,7 @@ import (
 	"github.com/forward-mcp/internal/config"
 	"github.com/forward-mcp/internal/domain/entities"
 	"github.com/forward-mcp/internal/domain/services/ratelimit"
+	"github.com/forward-mcp/internal/domain/services/redact"
 	"github.com/forward-mcp/internal/instancelock"
 	"github.com/forward-mcp/internal/logger"
 	"github.com/forward-mcp/internal/ports"
@@ -303,7 +304,8 @@ func runServeHTTP(args []string) {
 
 	exposure := usecases.NewToolExposure(entities.ServeModeRemote, cfg.Remote.EnableProposeTools)
 	registrar := mcpadapter.NewRegistrar(server, exposure, auditlog.New(log)).
-		WithRateLimiter(ratelimit.New(cfg.Remote.RateLimitPerMinute, cfg.Remote.RateLimitBurst))
+		WithRateLimiter(ratelimit.New(cfg.Remote.RateLimitPerMinute, cfg.Remote.RateLimitBurst)).
+		WithOutputRedactor(redact.ConfigRedactor{})
 	if err := forwardService.RegisterToolsWith(registrar); err != nil {
 		log.Fatalf("Failed to register tools: %v", err)
 	}

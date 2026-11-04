@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/forward-mcp/internal/domain/services/redact"
 	"net"
 	"os"
 	"path/filepath"
@@ -136,6 +137,7 @@ type ForwardMCPService struct {
 	embeddingService  EmbeddingService
 	certified         *usecases.CertifiedQueries
 	certifiedErr      error
+	predict           *usecases.PredictChanges
 	config            *config.Config
 	logger            *logger.Logger
 	instanceID        string // Unique identifier for this Forward Networks instance
@@ -261,6 +263,8 @@ func NewForwardMCPService(cfg *config.Config, logger *logger.Logger) *ForwardMCP
 
 	// Certified NQE library (M1a). Non-fatal if missing; tools report why.
 	service.initCertified(cfg.Forward.CertifiedLibraryPath)
+	// Forward Predict (M1b). Registered only when the policy allows propose tools.
+	service.initPredict()
 
 	// Set up database callback to automatically refresh query index when database is updated
 	if database != nil && queryIndex != nil {
@@ -519,7 +523,9 @@ func (s *ForwardMCPService) timeAndLogTool(toolName string, args interface{}, fn
 // builds its own Registrar with a restrictive policy and calls
 // RegisterToolsWith directly.
 func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
-	r := mcpadapter.NewRegistrar(server, usecases.NewToolExposure(entities.ServeModeStdio, true), auditlog.New(s.logger))
+	// Stdio clients send tool results to a model too: scrub them the same way.
+	r := mcpadapter.NewRegistrar(server, usecases.NewToolExposure(entities.ServeModeStdio, true), auditlog.New(s.logger)).
+		WithOutputRedactor(redact.ConfigRedactor{})
 	return s.RegisterToolsWith(r)
 }
 
@@ -791,6 +797,9 @@ func (s *ForwardMCPService) RegisterToolsWith(r *mcpadapter.Registrar) error {
 
 	// Certified NQE library tools (M1a)
 	s.registerCertifiedTools(r)
+
+	// Forward Predict tools (M1b; propose class)
+	s.registerPredictTools(r)
 
 	return r.Err()
 }

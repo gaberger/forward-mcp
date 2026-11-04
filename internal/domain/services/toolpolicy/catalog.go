@@ -181,4 +181,6 @@ var DefaultCatalog = MustCatalog([]entities.ToolSpec{
 	propose("predict_stage_edits"),
 	propose("predict_run_and_wait"),
 	propose("predict_get_results"),
+	propose("predict_find_change_set"),
+	write("predict_gc", fwd), // deletes change sets and their predicted snapshots; operator only
 })

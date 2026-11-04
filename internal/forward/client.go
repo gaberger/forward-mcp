@@ -18,6 +18,7 @@ import (
 
 	"github.com/forward-mcp/internal/config"
 	"github.com/forward-mcp/internal/logger"
+	"github.com/forward-mcp/internal/ports"
 )
 
 // ClientInterface defines the interface for Forward platform client operations
@@ -605,6 +606,61 @@ func (c *Client) makeRequest(method, endpoint string, body interface{}) (*http.R
 	}
 
 	return resp, nil
+}
+
+// Do implements ports.ForwardHTTP: a raw call with the client's credentials
+// and TLS settings. Non-2xx responses are returned to the caller rather
+// than mapped to errors, because unpublished endpoints (Predict) use
+// status codes the typed helpers do not know about.
+func (c *Client) Do(ctx context.Context, r ports.RawRequest) (ports.RawResponse, error) {
+	u := c.config.APIBaseURL + r.Path
+	if q := joinQuery(r); q != "" {
+		u += "?" + q
+	}
+	var body io.Reader
+	if r.Body != nil {
+		body = bytes.NewReader(r.Body)
+	}
+	req, err := http.NewRequestWithContext(ctx, r.Method, u, body)
+	if err != nil {
+		return ports.RawResponse{}, fmt.Errorf("failed to create request: %w", err)
+	}
+	if r.ContentType != "" {
+		req.Header.Set("Content-Type", r.ContentType)
+	}
+	if r.Accept != "" {
+		req.Header.Set("Accept", r.Accept)
+	} else {
+		req.Header.Set("Accept", "application/json")
+	}
+	authHeader, err := c.makeSecureAuthHeader()
+	if err != nil {
+		return ports.RawResponse{}, fmt.Errorf("failed to create auth header: %w", err)
+	}
+	req.Header.Set("Authorization", authHeader)
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return ports.RawResponse{}, fmt.Errorf("failed to send request to Forward Networks API: %w", err)
+	}
+	defer resp.Body.Close()
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return ports.RawResponse{}, fmt.Errorf("failed to read response: %w", err)
+	}
+	return ports.RawResponse{Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Body: b}, nil
+}
+
+// joinQuery renders RawQuery (verbatim flags) and Query (encoded) together.
+func joinQuery(r ports.RawRequest) string {
+	parts := make([]string, 0, 2)
+	if r.RawQuery != "" {
+		parts = append(parts, r.RawQuery)
+	}
+	if len(r.Query) > 0 {
+		parts = append(parts, r.Query.Encode())
+	}
+	return strings.Join(parts, "&")
 }
 
 // Legacy methods for backward compatibility

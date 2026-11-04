@@ -1,0 +1,11 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "device": "core-1",
+      "prefix": "10.50.0.0/16",
+      "sourceVrf": "CORP",
+      "targetVrf": "GUEST"
+    }
+  ]
+}

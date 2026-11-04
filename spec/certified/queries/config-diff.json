@@ -1,0 +1,52 @@
+{
+  "id": "config-diff",
+  "version": 1,
+  "title": "Device configuration diff",
+  "intent": "Configuration lines added or removed on each device between the previous and current snapshot: the 'what changed' view.",
+  "synonyms": [
+    "what changed in config",
+    "config changes since last snapshot",
+    "configuration diff",
+    "recent config changes",
+    "who changed the config",
+    "config drift"
+  ],
+  "parameters": [
+    {
+      "name": "device",
+      "type": "device",
+      "required": false,
+      "description": "Restrict to one device name; omit for the whole network."
+    }
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "device"
+    ],
+    "properties": {
+      "device": {
+        "type": "string"
+      },
+      "added": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "removed": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_51f090cbea069b4049eb283716ab3bbb3f578aea",
+    "repository": "fwd"
+  },
+  "fixture": "config-diff.v1.json"
+}

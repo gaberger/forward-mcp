@@ -1,0 +1,13 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "deviceA": "core-1",
+      "interfaceA": "Gi0/1",
+      "speedA": 1000,
+      "deviceB": "dist-1",
+      "interfaceB": "Gi0/24",
+      "speedB": 100
+    }
+  ]
+}

@@ -170,8 +170,11 @@ func readJSON(path string, v any) error {
 // the same components the MCP server uses.
 func forwardBackend() (ports.EvidenceRerun, error) {
 	cfg := config.LoadConfig()
-	if cfg.Forward.APIBaseURL == "" || cfg.Forward.APIKey == "" {
-		return nil, fmt.Errorf("-forward needs FORWARD_API_BASE_URL, FORWARD_API_KEY and FORWARD_API_SECRET")
+	if cfg.Forward.APIBaseURL == "" {
+		return nil, fmt.Errorf("-forward needs FORWARD_API_BASE_URL")
+	}
+	if err := cfg.Forward.ValidateAuth(); err != nil {
+		return nil, fmt.Errorf("-forward: %w", err)
 	}
 	log := logger.New()
 	client := forward.NewClient(&cfg.Forward)

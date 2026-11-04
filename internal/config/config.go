@@ -31,6 +31,9 @@ type RemoteConfig struct {
 	// StaticTokens is the "token=subject[:scopes[:networks]],..." table for
 	// Auth=static. Never log it.
 	StaticTokens string `json:"-" env:"FORWARD_REMOTE_STATIC_TOKENS"`
+	// BasicCredentialsFile holds API key / SHA-256(secret) entries for
+	// callers using HTTP Basic (FORWARD_REMOTE_AUTH includes "basic").
+	BasicCredentialsFile string `json:"basicCredentialsFile" env:"FORWARD_REMOTE_BASIC_CREDENTIALS_FILE"`
 	// AllowAnonymous lets Auth=none serve without credentials. Lab only.
 	AllowAnonymous bool `json:"allowAnonymous" env:"FORWARD_REMOTE_ALLOW_ANONYMOUS"`
 	// Stateless disables MCP session tracking (for load balancers without
@@ -56,8 +59,16 @@ type ServerConfig struct {
 
 // ForwardConfig holds Forward Networks API configuration
 type ForwardConfig struct {
+	// AuthType is how forward-mcp authenticates to the Forward API:
+	// "basic" (default; APIKey/APISecret), "token" (APIToken) or "jwt"
+	// (APIJWT, or APIJWTFile re-read when it changes).
+	AuthType          string `json:"authType" env:"FORWARD_API_AUTH_TYPE"`
 	APIKey            string `json:"apiKey" env:"FORWARD_API_KEY"`
 	APISecret         string `json:"apiSecret" env:"FORWARD_API_SECRET"`
+	APIToken          string `json:"-" env:"FORWARD_API_TOKEN"`
+	APITokenScheme    string `json:"apiTokenScheme" env:"FORWARD_API_TOKEN_SCHEME"` // default "Bearer"
+	APIJWT            string `json:"-" env:"FORWARD_API_JWT"`
+	APIJWTFile        string `json:"apiJwtFile" env:"FORWARD_API_JWT_FILE"`
 	APIBaseURL        string `json:"apiBaseUrl" env:"FORWARD_API_BASE_URL"`
 	DefaultNetworkID  string `json:"defaultNetworkId" env:"FORWARD_DEFAULT_NETWORK_ID"`
 	DefaultSnapshotID string `json:"defaultSnapshotId" env:"FORWARD_DEFAULT_SNAPSHOT_ID"`
@@ -153,22 +164,28 @@ func LoadConfig() *Config {
 			Host: getEnv("SERVER_HOST", "0.0.0.0"),
 		},
 		Remote: RemoteConfig{
-			EnableProposeTools: getEnvAsBool("FORWARD_ENABLE_PROPOSE_TOOLS", false),
-			Auth:               getEnv("FORWARD_REMOTE_AUTH", "static"),
-			StaticTokens:       getEnv("FORWARD_REMOTE_STATIC_TOKENS", ""),
-			AllowAnonymous:     getEnvAsBool("FORWARD_REMOTE_ALLOW_ANONYMOUS", false),
-			Stateless:          getEnvAsBool("FORWARD_REMOTE_STATELESS", false),
-			JWTIssuer:          getEnv("FORWARD_JWT_ISSUER", ""),
-			JWTAudience:        getEnv("FORWARD_JWT_AUDIENCE", "forward-mcp"),
-			JWTJWKSURL:         getEnv("FORWARD_JWT_JWKS_URL", ""),
-			JWTPublicKeyFile:   getEnv("FORWARD_JWT_PUBLIC_KEY_FILE", ""),
-			JWTHS256Secret:     getEnv("FORWARD_JWT_HS256_SECRET", ""),
-			RateLimitPerMinute: getEnvAsInt("FORWARD_REMOTE_RATE_LIMIT_PER_MIN", 600),
-			RateLimitBurst:     getEnvAsInt("FORWARD_REMOTE_RATE_LIMIT_BURST", 60),
+			EnableProposeTools:   getEnvAsBool("FORWARD_ENABLE_PROPOSE_TOOLS", false),
+			Auth:                 getEnv("FORWARD_REMOTE_AUTH", "static"),
+			StaticTokens:         getEnv("FORWARD_REMOTE_STATIC_TOKENS", ""),
+			BasicCredentialsFile: getEnv("FORWARD_REMOTE_BASIC_CREDENTIALS_FILE", ""),
+			AllowAnonymous:       getEnvAsBool("FORWARD_REMOTE_ALLOW_ANONYMOUS", false),
+			Stateless:            getEnvAsBool("FORWARD_REMOTE_STATELESS", false),
+			JWTIssuer:            getEnv("FORWARD_JWT_ISSUER", ""),
+			JWTAudience:          getEnv("FORWARD_JWT_AUDIENCE", "forward-mcp"),
+			JWTJWKSURL:           getEnv("FORWARD_JWT_JWKS_URL", ""),
+			JWTPublicKeyFile:     getEnv("FORWARD_JWT_PUBLIC_KEY_FILE", ""),
+			JWTHS256Secret:       getEnv("FORWARD_JWT_HS256_SECRET", ""),
+			RateLimitPerMinute:   getEnvAsInt("FORWARD_REMOTE_RATE_LIMIT_PER_MIN", 600),
+			RateLimitBurst:       getEnvAsInt("FORWARD_REMOTE_RATE_LIMIT_BURST", 60),
 		},
 		Forward: ForwardConfig{
+			AuthType:             getEnv("FORWARD_API_AUTH_TYPE", ""),
 			APIKey:               getEnv("FORWARD_API_KEY", ""),
 			APISecret:            getEnv("FORWARD_API_SECRET", ""),
+			APIToken:             getEnv("FORWARD_API_TOKEN", ""),
+			APITokenScheme:       getEnv("FORWARD_API_TOKEN_SCHEME", ""),
+			APIJWT:               getEnv("FORWARD_API_JWT", ""),
+			APIJWTFile:           getEnv("FORWARD_API_JWT_FILE", ""),
 			APIBaseURL:           getEnv("FORWARD_API_BASE_URL", ""),
 			Timeout:              getEnvAsInt("FORWARD_TIMEOUT", 600), // 10 minutes for enhanced API operations
 			CACertPath:           getEnv("FORWARD_CA_CERT_PATH", ""),
@@ -315,4 +332,35 @@ func getEnvAsFloat(key string, defaultValue float64) float64 {
 		}
 	}
 	return defaultValue
+}
+
+// EffectiveAuthType is AuthType normalised, defaulting to "basic".
+func (f ForwardConfig) EffectiveAuthType() string {
+	t := strings.ToLower(strings.TrimSpace(f.AuthType))
+	if t == "" {
+		return "basic"
+	}
+	return t
+}
+
+// ValidateAuth checks that the credentials for the selected auth type are
+// present. Messages name variables, never values.
+func (f ForwardConfig) ValidateAuth() error {
+	switch f.EffectiveAuthType() {
+	case "basic":
+		if f.APIKey == "" || f.APISecret == "" {
+			return fmt.Errorf("Forward API auth type basic needs FORWARD_API_KEY and FORWARD_API_SECRET")
+		}
+	case "token":
+		if f.APIToken == "" {
+			return fmt.Errorf("Forward API auth type token needs FORWARD_API_TOKEN")
+		}
+	case "jwt":
+		if f.APIJWT == "" && f.APIJWTFile == "" {
+			return fmt.Errorf("Forward API auth type jwt needs FORWARD_API_JWT_FILE (preferred) or FORWARD_API_JWT")
+		}
+	default:
+		return fmt.Errorf("unsupported FORWARD_API_AUTH_TYPE %q (basic|token|jwt)", f.AuthType)
+	}
+	return nil
 }

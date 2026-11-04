@@ -96,6 +96,11 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
 ## [Unreleased]
 
 ### Added
+- **Multiple authentication schemes, both directions.**
+  - Callers to remote mode: `FORWARD_REMOTE_AUTH` takes a list of `jwt`, `token` (alias `static`) and `basic`. `basic` accepts `Authorization: Basic` API key/secret and verifies it against SHA-256 hashes in `FORWARD_REMOTE_BASIC_CREDENTIALS_FILE`, in constant time. Credentials are routed by shape (`identity/multi`), never by trial.
+  - forward-mcp to the Forward API: `FORWARD_API_AUTH_TYPE` = `basic` (default), `token` (`FORWARD_API_TOKEN`, scheme configurable) or `jwt` (`FORWARD_API_JWT_FILE`, re-read on rotation, expired tokens refused before sending). Both request paths share one credential function; previously the retrying path built Basic auth inline.
+
+### Added
 - **Tool classes and serve-mode policy** (netorch M1.0, see `PLAN.md`)
   - Every tool is classified `read`, `propose` or `write` in `internal/domain/services/toolpolicy.DefaultCatalog`; registering an uncatalogued tool fails at startup
   - `ServeModeStdio` exposes all classes (unchanged 3.0.0 behaviour); `ServeModeRemote` exposes only `read` tools, adds `propose` tools when enabled, and can never expose `write` tools

@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -77,6 +78,7 @@ type ClientInterface interface {
 type Client struct {
 	httpClient *http.Client
 	config     *config.ForwardConfig
+	jwt        jwtFileCache
 }
 
 // NewClient creates a new Forward platform client
@@ -534,10 +536,9 @@ func (c *Client) makeRequest(method, endpoint string, body interface{}) (*http.R
 
 	req.Header.Set("Content-Type", "application/json")
 
-	// SECURITY FIX: Zero sensitive credentials from memory after use
-	authHeader, err := c.makeSecureAuthHeader()
+	authHeader, err := c.authHeader()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create auth header: %w", err)
+		return nil, err
 	}
 	req.Header.Set("Authorization", authHeader)
 
@@ -639,6 +640,10 @@ func (c *Client) retryWithBackoff(ctx context.Context, operation func() error, m
 		if err == nil {
 			return nil // Success
 		}
+		var perm permanentError
+		if errors.As(err, &perm) {
+			return perm.err // e.g. missing or expired credential: retrying cannot help
+		}
 
 		lastErr = err
 
@@ -690,8 +695,11 @@ func (c *Client) makeRequestWithRetry(ctx context.Context, method, endpoint stri
 		}
 
 		req.Header.Set("Content-Type", "application/json")
-		auth := base64.StdEncoding.EncodeToString([]byte(c.config.APIKey + ":" + c.config.APISecret))
-		req.Header.Set("Authorization", "Basic "+auth)
+		authHeader, err := c.authHeader()
+		if err != nil {
+			return backoffPermanent(err)
+		}
+		req.Header.Set("Authorization", authHeader)
 
 		resp, err := c.httpClient.Do(req)
 		if err != nil {

@@ -36,16 +36,39 @@ Identifiers only; anything that looks like a credential is redacted.
 
 ## Identity
 
-The bearer token on every request is verified by a `ports.IdentityVerifier`
-and becomes a `Caller{Subject, Issuer, Scopes, NetworkIDs}` visible to tool
-handlers via `ports.CallerFromContext`. Missing or bad token → `401`;
-tool denied by policy → MCP tool error with the reason.
+Every request carries one credential, which is verified and becomes a
+`Caller{Subject, Issuer, Scopes, NetworkIDs}` visible to tool handlers via
+`ports.CallerFromContext`. A missing or bad credential gets `401`. A tool
+denied by policy returns an MCP tool error with the reason.
 
-| `FORWARD_REMOTE_AUTH` | Verifier | Use |
+`FORWARD_REMOTE_AUTH` is a comma list of the schemes to accept, for
+example `jwt,token,basic`. Each credential goes to the verifier for its
+shape, never by trial and error: a JWT that fails JWT checks is not retried
+as an opaque token.
+
+| Scheme | Client sends | Server config | Use |
+|---|---|---|---|
+| `jwt` | `Authorization: Bearer <JWT>` | `FORWARD_JWT_ISSUER`, `FORWARD_JWT_AUDIENCE` (default `forward-mcp`) and one of `FORWARD_JWT_JWKS_URL` (netorch `tokend` or any issuer), `FORWARD_JWT_PUBLIC_KEY_FILE` (PEM) or `FORWARD_JWT_HS256_SECRET` (lab). Algorithms: RS*, PS*, ES*; HS256 only with the secret option. Claims: `sub`, `iss`, `aud` and `exp` are required; `scope` ("predict read") or `scopes`; `network_ids`. | production; agents via tokend (netorch ADR-003) |
+| `token` (alias `static`) | `Authorization: Bearer <opaque token>` | `FORWARD_REMOTE_STATIC_TOKENS` = `token=subject[:scope1+scope2[:net1+net2]],…` (tokens of 16+ chars) | service accounts that can't mint JWTs; development |
+| `basic` | `Authorization: Basic base64(api_key:api_secret)` | `FORWARD_REMOTE_BASIC_CREDENTIALS_FILE`: `{"credentials":[{"key","secret_sha256","subject","scopes","network_ids"}]}`. Only the SHA-256 of each secret is stored (`printf %s "$SECRET" \| sha256sum`). | API key/secret clients and tools |
+| `none` (alone) | nothing | requires `FORWARD_REMOTE_ALLOW_ANONYMOUS=true`; every caller is `local` | lab only |
+
+The default is `static`, which keeps the earlier behaviour. Basic headers
+are rewritten internally into the bearer chain, so all three schemes share
+the per-subject rate limits, the audit log and per-caller isolation.
+
+## Forward API credentials (outbound)
+
+`FORWARD_API_AUTH_TYPE` selects how forward-mcp authenticates to Forward:
+
+| Type | Config | Header sent |
 |---|---|---|
-| `static` (default) | `FORWARD_REMOTE_STATIC_TOKENS` = `token=subject[:scope1+scope2[:net1+net2]],…` (tokens ≥ 16 chars) | development, S2 spike, isolation tests |
-| `none` | requires `FORWARD_REMOTE_ALLOW_ANONYMOUS=true`; every caller is `local` | lab only |
-| `jwt` | `FORWARD_JWT_ISSUER` + `FORWARD_JWT_AUDIENCE` (default `forward-mcp`) + one of `FORWARD_JWT_JWKS_URL` (netorch `tokend` or any issuer), `FORWARD_JWT_PUBLIC_KEY_FILE` (PEM), `FORWARD_JWT_HS256_SECRET` (lab). Algorithms RS*/PS*/ES*; HS256 only with the secret option. Claims: `sub`, `iss`, `aud`, `exp` required; `scope` ("predict read") or `scopes`; `network_ids`. | production |
+| `basic` (default) | `FORWARD_API_KEY`, `FORWARD_API_SECRET` | `Basic base64(key:secret)`, built in a buffer that is zeroed after use |
+| `token` | `FORWARD_API_TOKEN`, optional `FORWARD_API_TOKEN_SCHEME` (default `Bearer`) | `<scheme> <token>` |
+| `jwt` | `FORWARD_API_JWT_FILE` (re-read when it changes, so it can be rotated) or `FORWARD_API_JWT` | `Bearer <jwt>`. An expired token is refused before sending, with no retries. |
+
+Both request paths (plain and retrying) use the same credential code.
+Startup fails with the name of the missing variable, never its value.
 
 Scopes in use: `predict` (required for propose tools). Network ids on a
 caller, when present, restrict which networks it may touch: a Forward-bound

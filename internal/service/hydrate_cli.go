@@ -32,8 +32,8 @@ func RunHydrateCLI(cfg *config.Config, log *logger.Logger, opts HydrateCLIOption
 	}
 	fmt.Printf("Hydrating NQE database (instance %s, API %s)\n", instanceID, cfg.Forward.APIBaseURL)
 
-	if cfg.Forward.APIKey == "" || cfg.Forward.APISecret == "" {
-		return fmt.Errorf("FORWARD_API_KEY / FORWARD_API_SECRET not configured (check .env or environment)")
+	if err := cfg.Forward.ValidateAuth(); err != nil {
+		return fmt.Errorf("%w (check .env or environment)", err)
 	}
 
 	client := forward.NewClient(&cfg.Forward)

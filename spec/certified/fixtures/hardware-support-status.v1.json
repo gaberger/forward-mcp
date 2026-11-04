@@ -1,0 +1,12 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "device": "core-2",
+      "model": "WS-C6509-E",
+      "endOfSale": "2015-01-30",
+      "endOfSupport": "2022-01-31",
+      "status": "END_OF_SUPPORT"
+    }
+  ]
+}

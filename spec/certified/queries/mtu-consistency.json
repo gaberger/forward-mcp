@@ -1,0 +1,52 @@
+{
+  "id": "mtu-consistency",
+  "version": 1,
+  "title": "MTU consistency across links",
+  "intent": "Links whose two ends are configured with different MTU values, which can silently drop large frames and break OSPF adjacencies.",
+  "synonyms": [
+    "mtu mismatch",
+    "mismatched mtu",
+    "mtu inconsistent on link",
+    "mtu different on each side",
+    "jumbo frame mismatch"
+  ],
+  "parameters": [],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "deviceA",
+      "interfaceA",
+      "mtuA",
+      "deviceB",
+      "interfaceB",
+      "mtuB"
+    ],
+    "properties": {
+      "deviceA": {
+        "type": "string"
+      },
+      "interfaceA": {
+        "type": "string"
+      },
+      "mtuA": {
+        "type": "integer"
+      },
+      "deviceB": {
+        "type": "string"
+      },
+      "interfaceB": {
+        "type": "string"
+      },
+      "mtuB": {
+        "type": "integer"
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_3288480f98a27fc7a7f13eb0168314b51ac00de0",
+    "repository": "fwd"
+  },
+  "fixture": "mtu-consistency.v1.json"
+}

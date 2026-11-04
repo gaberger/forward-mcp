@@ -95,6 +95,9 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
 
 ## [Unreleased]
 
+### Security
+- **Tool output redaction** (spec non-negotiable #4): every tool result, in remote and stdio mode, now passes through `redact.ConfigRedactor` at the Registrar before it reaches the client and the model. Device-config secrets are replaced with `<redacted:KIND>`: enable/user/line passwords and secrets, SNMP communities and v3 auth/priv keys, TACACS/RADIUS keys, OSPF/BGP/NTP authentication keys, key-strings, IKE and Wi-Fi pre-shared keys, Junos `encrypted-password` and `$9$` values, PAN-OS `<password>`/`<phash>`, crypt hashes and PEM private keys. Works on raw config and on config inside JSON (including Go's `\u003c` escaping) and keeps JSON valid. BGP communities, interfaces and addresses are untouched. Gated by fixtures, a 1,000-case property test and an end-to-end HTTP test.
+
 ### Added
 - **Tool classes and serve-mode policy** (netorch M1.0, see `PLAN.md`)
   - Every tool is classified `read`, `propose` or `write` in `internal/domain/services/toolpolicy.DefaultCatalog`; registering an uncatalogued tool fails at startup
@@ -104,6 +107,7 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - New hex-architecture packages per ADR-001: `domain/entities` (ToolClass, Caller, AuditEvent), `ports` (ToolRegistry, ToolPolicy, AuditLogger, IdentityVerifier), `usecases` (ToolExposure), `adapters/mcp`, `adapters/auditlog`
 - **Certified NQE library, schema and loader** (netorch M1a.1)
   - `spec/certified/`: versioned library (`VERSION`, `queries/<id>.json`, `fixtures/`) with three seed entries
+  - Library 0.2.0: 14 further entries drawn from the Forward NQE library (interface status/errors, MTU/speed/VLAN consistency, CDP/LLDP neighbors and discovery gaps, hardware inventory and support status, CVE exposure, VTY non-SSH access, VRF route leaking, duplicate IPs, config diff). Shipped `certified: false` until their output columns are reviewed against a live instance; results carry `certified:false` meanwhile
   - `domain/entities.CertifiedQuery` / `Evidence`; `domain/services/certified` validation rules (every problem reported with file and field; `certified:true` requires owner, fixture and output schema)
   - `adapters/certifiedfs` loads any `fs.FS`; golden test proves the checked-in library always loads
   - Tools `search_certified_queries`, `check_answerable`, `run_certified_query` (read class) backed by `usecases.CertifiedQueries`; ranking reuses the configured embedding provider plus verbatim synonym boosts; parameters validated against the entry; output shape drift reported as warnings (M1a.3–1a.5)

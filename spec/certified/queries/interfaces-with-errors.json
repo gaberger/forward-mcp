@@ -1,0 +1,50 @@
+{
+  "id": "interfaces-with-errors",
+  "version": 1,
+  "title": "Interfaces with error status (Cisco and Arista)",
+  "intent": "Interfaces reporting an error state such as err-disabled, with device, interface and the reported reason.",
+  "synonyms": [
+    "err-disabled ports",
+    "errdisabled interfaces",
+    "interfaces in error state",
+    "port errors",
+    "interface error reason"
+  ],
+  "parameters": [
+    {
+      "name": "device",
+      "type": "device",
+      "required": false,
+      "description": "Restrict to one device name; omit for the whole network."
+    }
+  ],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "device",
+      "interface",
+      "status"
+    ],
+    "properties": {
+      "device": {
+        "type": "string"
+      },
+      "interface": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      },
+      "reason": {
+        "type": "string"
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_32f6ed0e70ab0ec12991bfa15b374da286a096b7",
+    "repository": "fwd"
+  },
+  "fixture": "interfaces-with-errors.v1.json"
+}

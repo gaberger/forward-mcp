@@ -1,0 +1,12 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "device": "access-3",
+      "interface": "Gi1/0/48",
+      "neighborName": "ap-lobby-1",
+      "neighborAddress": "10.1.5.20",
+      "platform": "C9120"
+    }
+  ]
+}

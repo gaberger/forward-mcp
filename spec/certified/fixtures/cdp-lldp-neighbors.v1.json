@@ -1,0 +1,12 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "device": "leaf-1",
+      "interface": "Ethernet49",
+      "protocol": "LLDP",
+      "neighborDevice": "spine-1",
+      "neighborInterface": "Ethernet1"
+    }
+  ]
+}

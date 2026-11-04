@@ -1,0 +1,45 @@
+{
+  "id": "hardware-support-status",
+  "version": 1,
+  "title": "Hardware support (end of life/sale) status",
+  "intent": "Devices whose hardware model has reached end of sale, end of support or end of life according to vendor notices.",
+  "synonyms": [
+    "end of life hardware",
+    "eol devices",
+    "end of support hardware",
+    "unsupported chassis",
+    "hardware past end of sale"
+  ],
+  "parameters": [],
+  "output_schema": {
+    "type": "object",
+    "required": [
+      "device",
+      "model"
+    ],
+    "properties": {
+      "device": {
+        "type": "string"
+      },
+      "model": {
+        "type": "string"
+      },
+      "endOfSale": {
+        "type": "string"
+      },
+      "endOfSupport": {
+        "type": "string"
+      },
+      "status": {
+        "type": "string"
+      }
+    }
+  },
+  "owner": "gary@sticksandstrings.org",
+  "certified": false,
+  "source": {
+    "nqe_query_id": "FQ_f0984b777b940b4376ed3ec4317ad47437426e7c",
+    "repository": "fwd"
+  },
+  "fixture": "hardware-support-status.v1.json"
+}

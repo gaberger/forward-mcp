@@ -17,3 +17,8 @@ Rules (enforced by `internal/adapters/certifiedfs` at load time):
   (minor for additions, major for removed/renamed ids).
 
 Full guide: `docs/certified-library.md`.
+
+Review queue: entries at version 1 with `certified: false` were seeded from query ids in
+`spec/NQELibrary.json`; their `output_schema` and fixtures are best-effort until a live run
+confirms the column names. Review = run `run_certified_query` against a real snapshot, fix
+the schema/fixture to match, then flip `certified: true` and bump `version` if the schema changed.

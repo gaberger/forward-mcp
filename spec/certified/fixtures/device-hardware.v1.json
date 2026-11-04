@@ -1,0 +1,12 @@
+{
+  "snapshotId": "fixture-snap-1",
+  "items": [
+    {
+      "device": "spine-1",
+      "vendor": "ARISTA",
+      "model": "DCS-7050SX3-48YC8",
+      "serialNumber": "JPE00000001",
+      "osVersion": "4.30.1F"
+    }
+  ]
+}

@@ -124,6 +124,7 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - A caller with network ids is denied Forward-bound tools for other networks and must name a network explicitly
   - Per-subject token-bucket rate limit (`FORWARD_REMOTE_RATE_LIMIT_PER_MIN`, `_BURST`)
   - Every logger line, tool-call argument dump and error passes through `domain/services/redact` (JWTs, bearer/basic values, `key=value` secrets)
+- **Eval grader** (netorch E.1–E.2): `cmd/eval-grader` grades an agent answer against a replay case deterministically — every gold evidence item must be cited and must reproduce on re-run (row-set comparison with normalised keys, or path outcome); the verdict must match; uncited network facts are detected from explicit `facts` or from the summary heuristically. Re-run backends: live Forward (in-process, same certified library and client as the server; `-record` captures a fixture) or a recorded fixture for CI. Seed case, answer and recording under `cmd/eval-grader/testdata`; `make eval-grade-seed`
 - **Predict HTTP contract**: `docs/predict-endpoints.md`, generated from the Forward Python SDK's unpublished OpenAPI by `scripts/gen-predict-endpoints`, with round-trip, wait and verdict semantics (netorch 1b.0)
 - **Instance Lock Protection**: Prevent multiple MCP server instances from running simultaneously
   - File-based locking mechanism using PID validation

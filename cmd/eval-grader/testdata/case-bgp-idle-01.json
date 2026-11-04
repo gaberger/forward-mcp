@@ -1,0 +1,25 @@
+{
+  "id": "bgp-idle-01",
+  "network_id": "162112",
+  "snapshot_before": "fixture-snap-1",
+  "input": {"question": "Why can't 10.1.1.10 reach 10.2.2.20?"},
+  "expected_verdict": "cause",
+  "gold": [
+    {
+      "kind": "nqe",
+      "ref": "certified:bgp-peerings-not-established@1",
+      "snapshot_id": "fixture-snap-1",
+      "key_columns": ["device", "neighborAddress", "state"],
+      "expected_rows": [
+        {"device": "router-1", "neighborAddress": "192.0.2.2", "state": "IDLE"}
+      ]
+    },
+    {
+      "kind": "path_search",
+      "ref": "path:10.1.1.10->10.2.2.20",
+      "snapshot_id": "fixture-snap-1",
+      "expected_outcome": "DROPPED"
+    }
+  ],
+  "notes": "Seed case; rows mirror spec/certified/fixtures/bgp-peerings-not-established.v1.json."
+}

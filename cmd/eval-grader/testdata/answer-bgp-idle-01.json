@@ -1,0 +1,13 @@
+{
+  "summary": "The BGP session from router-1 to 192.0.2.2 (AS 65002) is IDLE [0]. Traffic from 10.1.1.10 to 10.2.2.20 is dropped at router-1 because no route is learned [1]. Suggested next step: check the neighbor's reachability and the BGP configuration on router-1.",
+  "evidence": [
+    {"kind": "nqe", "ref": "certified:bgp-peerings-not-established@1", "snapshot_id": "fixture-snap-1", "library_version": "0.1.0", "certified": true},
+    {"kind": "path_search", "ref": "path:10.1.1.10->10.2.2.20", "snapshot_id": "fixture-snap-1", "certified": false}
+  ],
+  "confidence": 0.85,
+  "next_step": "Check BGP neighbor 192.0.2.2 reachability from router-1.",
+  "verdict": "cause",
+  "tool_calls": 4,
+  "tokens": 1850,
+  "latency_ms": 6100
+}

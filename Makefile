@@ -63,6 +63,11 @@ serve-http: build
 	@echo "Starting Forward MCP remote server..."
 	./$(BUILD_DIR)/$(BINARY_NAME) serve-http
 
+# Grade the seed eval case against its recording (no Forward needed).
+eval-grade-seed:
+	$(GOCMD) run ./cmd/eval-grader -case cmd/eval-grader/testdata/case-bgp-idle-01.json \
+		-answer cmd/eval-grader/testdata/answer-bgp-idle-01.json -fixture cmd/eval-grader/testdata/fixture.json -v
+
 # Run integration tests with timeout
 test-integration:
 	@echo "Running integration tests (with 60s timeout)..."

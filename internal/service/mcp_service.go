@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/forward-mcp/internal/domain/services/redact"
 	"net"
 	"os"
 	"path/filepath"
@@ -519,7 +520,9 @@ func (s *ForwardMCPService) timeAndLogTool(toolName string, args interface{}, fn
 // builds its own Registrar with a restrictive policy and calls
 // RegisterToolsWith directly.
 func (s *ForwardMCPService) RegisterTools(server *mcp.Server) error {
-	r := mcpadapter.NewRegistrar(server, usecases.NewToolExposure(entities.ServeModeStdio, true), auditlog.New(s.logger))
+	// Stdio clients send tool results to a model too: scrub them the same way.
+	r := mcpadapter.NewRegistrar(server, usecases.NewToolExposure(entities.ServeModeStdio, true), auditlog.New(s.logger)).
+		WithOutputRedactor(redact.ConfigRedactor{})
 	return s.RegisterToolsWith(r)
 }
 

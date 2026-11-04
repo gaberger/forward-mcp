@@ -95,6 +95,9 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
 
 ## [Unreleased]
 
+### Security
+- **Tool output redaction** (spec non-negotiable #4): every tool result, in remote and stdio mode, now passes through `redact.ConfigRedactor` at the Registrar before it reaches the client and the model. Device-config secrets are replaced with `<redacted:KIND>`: enable/user/line passwords and secrets, SNMP communities and v3 auth/priv keys, TACACS/RADIUS keys, OSPF/BGP/NTP authentication keys, key-strings, IKE and Wi-Fi pre-shared keys, Junos `encrypted-password` and `$9$` values, PAN-OS `<password>`/`<phash>`, crypt hashes and PEM private keys. Works on raw config and on config inside JSON (including Go's `\u003c` escaping) and keeps JSON valid. BGP communities, interfaces and addresses are untouched. Gated by fixtures, a 1,000-case property test and an end-to-end HTTP test.
+
 ### Added
 - **Tool classes and serve-mode policy** (netorch M1.0, see `PLAN.md`)
   - Every tool is classified `read`, `propose` or `write` in `internal/domain/services/toolpolicy.DefaultCatalog`; registering an uncatalogued tool fails at startup

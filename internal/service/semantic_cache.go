@@ -71,9 +71,12 @@ type CacheMetrics struct {
 
 // SemanticCache provides intelligent caching with embedding-based similarity and configurable eviction
 type SemanticCache struct {
-	entries          map[string]*CacheEntry
-	embeddingIndex   []*CacheEntry
-	mutex            sync.RWMutex
+	entries        map[string]*CacheEntry
+	embeddingIndex []*CacheEntry
+	mutex          sync.RWMutex
+	// avgResponseBits holds math.Float64bits of the running average
+	// response time; updated lock-free by concurrent GetFor calls.
+	avgResponseBits  atomic.Uint64
 	embeddingService EmbeddingService
 	logger           *logger.Logger
 	instanceID       string // Unique identifier for this Forward Networks instance
@@ -316,7 +319,7 @@ func (sc *SemanticCache) GetFor(subject, query, networkID, snapshotID string) (*
 	start := time.Now()
 	defer func() {
 		if sc.metricsEnabled {
-			sc.metrics.AvgResponseTimeMs = (sc.metrics.AvgResponseTimeMs + float64(time.Since(start).Nanoseconds())/1e6) / 2
+			sc.recordResponseTime(float64(time.Since(start).Nanoseconds()) / 1e6)
 		}
 	}()
 
@@ -357,8 +360,8 @@ func (sc *SemanticCache) GetFor(subject, query, networkID, snapshotID string) (*
 			sc.logger.Debug("Failed to generate embedding for semantic search: %v", err)
 		} else {
 			// Search for semantically similar queries
-			bestMatch := sc.findBestMatch(embedding, subject, networkID, snapshotID)
-			if bestMatch != nil && bestMatch.SimilarityScore >= sc.similarityThreshold {
+			bestMatch, similarity := sc.findBestMatch(embedding, subject, networkID, snapshotID)
+			if bestMatch != nil && similarity >= sc.similarityThreshold {
 				result, err := sc.getResultFromEntry(bestMatch)
 				if err != nil {
 					sc.logger.Error("Failed to retrieve result from best match: %v", err)
@@ -375,7 +378,7 @@ func (sc *SemanticCache) GetFor(subject, query, networkID, snapshotID string) (*
 				atomic.AddInt64(&sc.metrics.HitCount, 1)
 
 				sc.logger.Debug("CACHE HIT: Semantic match (%.3f similarity) for query: %s",
-					bestMatch.SimilarityScore, truncateString(query, 50))
+					similarity, truncateString(query, 50))
 				return result, true
 			}
 		}
@@ -491,8 +494,13 @@ func (sc *SemanticCache) PutFor(subject, query, networkID, snapshotID string, re
 	return nil
 }
 
-// findBestMatch finds the most similar cached query
-func (sc *SemanticCache) findBestMatch(embedding []float64, subject, networkID, snapshotID string) *CacheEntry {
+// findBestMatch finds the most similar cached query for subject. It takes
+// the read lock itself (callers must not hold it) and returns the score
+// separately rather than writing it onto the shared entry, so concurrent
+// callers never race on CacheEntry fields.
+func (sc *SemanticCache) findBestMatch(embedding []float64, subject, networkID, snapshotID string) (*CacheEntry, float64) {
+	sc.mutex.RLock()
+	defer sc.mutex.RUnlock()
 	var bestMatch *CacheEntry
 	var bestSimilarity float64
 
@@ -512,11 +520,18 @@ func (sc *SemanticCache) findBestMatch(embedding []float64, subject, networkID, 
 		}
 	}
 
-	if bestMatch != nil {
-		bestMatch.SimilarityScore = bestSimilarity
-	}
+	return bestMatch, bestSimilarity
+}
 
-	return bestMatch
+// recordResponseTime folds ms into the running average without a lock.
+func (sc *SemanticCache) recordResponseTime(ms float64) {
+	for {
+		old := sc.avgResponseBits.Load()
+		next := (math.Float64frombits(old) + ms) / 2
+		if sc.avgResponseBits.CompareAndSwap(old, math.Float64bits(next)) {
+			return
+		}
+	}
 }
 
 // isExpired checks if a cache entry has expired
@@ -713,8 +728,8 @@ func (sc *SemanticCache) evictLargest() {
 
 // GetStats returns cache performance statistics
 func (sc *SemanticCache) GetStats() map[string]interface{} {
-	sc.mutex.RLock()
-	defer sc.mutex.RUnlock()
+	sc.mutex.Lock() // writes sc.metrics below
+	defer sc.mutex.Unlock()
 
 	// SECURITY FIX: Use atomic operations to read metrics safely
 	totalQueries := atomic.LoadInt64(&sc.metrics.TotalQueries)
@@ -732,6 +747,7 @@ func (sc *SemanticCache) GetStats() map[string]interface{} {
 	sc.metrics.MemoryUsageBytes = sc.currentMemoryUsage
 	sc.metrics.MemoryUsageMB = float64(sc.currentMemoryUsage) / (1024 * 1024)
 	sc.metrics.HitRate = hitRate
+	sc.metrics.AvgResponseTimeMs = math.Float64frombits(sc.avgResponseBits.Load())
 
 	return map[string]interface{}{
 		"total_entries":        len(sc.entries),

@@ -24,7 +24,7 @@ const s2Queries = 20
 const s2Rounds = 5
 
 type s2Stats struct {
-	hits, misses, leaks, memLeaks, memErrors atomic.Int64
+	hits, misses, semanticHits, leaks, memLeaks, memErrors atomic.Int64
 }
 
 func s2Callers() []entities.Caller {
@@ -76,6 +76,17 @@ func TestS2FiveIdentitiesConcurrentIsolation(t *testing.T) {
 						st.leaks.Add(1)
 					}
 				}
+				// Own entries via the semantic path (no snapshot pin, so the
+				// exact key misses and findBestMatch runs against the shared
+				// index while other identities write to it).
+				for q := 0; q < s2Queries; q += 4 {
+					if got, hit := view.cache().Get(s2Query(c.Subject, q), network, ""); hit {
+						st.semanticHits.Add(1)
+						if len(got.Items) == 0 || got.Items[0]["owner"] != c.Subject {
+							st.leaks.Add(1)
+						}
+					}
+				}
 				// Probe every other identity's keys, exact and semantic.
 				for j, other := range callers {
 					if j == i {
@@ -112,12 +123,30 @@ func TestS2FiveIdentitiesConcurrentIsolation(t *testing.T) {
 			}
 		}(i, c)
 	}
+	// An operator polling cache stats while agents work.
+	stop := make(chan struct{})
+	var statsWG sync.WaitGroup
+	statsWG.Add(1)
+	go func() {
+		defer statsWG.Done()
+		<-start
+		for {
+			select {
+			case <-stop:
+				return
+			default:
+				_ = svc.semanticCache.GetStats()
+			}
+		}
+	}()
 	close(start)
 	wg.Wait()
+	close(stop)
+	statsWG.Wait()
 
 	var totalLeaks, totalMemLeaks, totalMemErrors int64
 	t.Logf("S2: %d identities x %d queries x %d rounds", s2Identities, s2Queries, s2Rounds)
-	t.Logf("%-10s %6s %6s %8s %6s %8s %7s", "identity", "hits", "misses", "hit-rate", "leaks", "memLeaks", "memErr")
+	t.Logf("%-10s %6s %6s %8s %8s %6s %8s %7s", "identity", "hits", "misses", "hit-rate", "semantic", "leaks", "memLeaks", "memErr")
 	for i, c := range callers {
 		st := stats[i]
 		h, m := st.hits.Load(), st.misses.Load()
@@ -125,7 +154,7 @@ func TestS2FiveIdentitiesConcurrentIsolation(t *testing.T) {
 		if h+m > 0 {
 			rate = float64(h) / float64(h+m)
 		}
-		t.Logf("%-10s %6d %6d %8.2f %6d %8d %7d", c.Subject, h, m, rate, st.leaks.Load(), st.memLeaks.Load(), st.memErrors.Load())
+		t.Logf("%-10s %6d %6d %8.2f %8d %6d %8d %7d", c.Subject, h, m, rate, st.semanticHits.Load(), st.leaks.Load(), st.memLeaks.Load(), st.memErrors.Load())
 		totalLeaks += st.leaks.Load()
 		totalMemLeaks += st.memLeaks.Load()
 		totalMemErrors += st.memErrors.Load()

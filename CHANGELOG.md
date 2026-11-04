@@ -95,6 +95,12 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
 
 ## [Unreleased]
 
+### Fixed
+- **SemanticCache data races under concurrent callers** (found by the S2 five-identity test under `-race`)
+  - Average response time is now updated lock-free (CAS on float bits) instead of an unsynchronised read-modify-write in `GetFor`
+  - `findBestMatch` takes the read lock while walking the embedding index and returns the similarity instead of writing it onto the shared entry
+  - `GetStats` takes the write lock because it updates the metrics struct
+
 ### Added
 - **Tool classes and serve-mode policy** (netorch M1.0, see `PLAN.md`)
   - Every tool is classified `read`, `propose` or `write` in `internal/domain/services/toolpolicy.DefaultCatalog`; registering an uncatalogued tool fails at startup

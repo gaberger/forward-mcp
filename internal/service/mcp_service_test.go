@@ -564,10 +564,11 @@ func createTestService() *ForwardMCPService {
 
 	ctx, cancel := context.WithCancel(context.Background())
 	service := &ForwardMCPService{
-		forwardClient: NewMockForwardClient(),
-		config:        cfg,
-		logger:        logger,
-		instanceID:    "test", // Add instance ID for test service
+		forwardClient:    NewMockForwardClient(),
+		embeddingService: embeddingService,
+		config:           cfg,
+		logger:           logger,
+		instanceID:       "test", // Add instance ID for test service
 		defaults: &ServiceDefaults{
 			NetworkID:  "162112",
 			SnapshotID: "",
@@ -587,6 +588,9 @@ func createTestService() *ForwardMCPService {
 		ctx:               ctx,
 		cancelFunc:        cancel,
 	}
+
+	// Certified library from the repo (tests run from internal/service).
+	service.initCertified("../../spec/certified")
 
 	return service
 }

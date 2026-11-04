@@ -1,8 +1,9 @@
 package entities
 
 type NQERunResult struct {
-	SnapshotID string                   `json:"snapshotId"`
-	Items      []map[string]interface{} `json:"items"`
+	SnapshotID    string                   `json:"snapshotId"`
+	Items         []map[string]interface{} `json:"items"`
+	TotalNumItems int64                    `json:"totalNumItems,omitempty"`
 }
 
 type NQEQuery struct {

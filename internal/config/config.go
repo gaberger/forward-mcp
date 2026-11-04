@@ -33,6 +33,10 @@ type ForwardConfig struct {
 	DefaultSnapshotID string `json:"defaultSnapshotId" env:"FORWARD_DEFAULT_SNAPSHOT_ID"`
 	DefaultQueryLimit int    `json:"defaultQueryLimit" env:"FORWARD_DEFAULT_QUERY_LIMIT"`
 
+	// CertifiedLibraryPath is the directory holding the certified NQE
+	// library (VERSION, queries/, fixtures/). Relative to the working dir.
+	CertifiedLibraryPath string `json:"certifiedLibraryPath" env:"FORWARD_CERTIFIED_LIBRARY_PATH"`
+
 	// Instance Configuration
 	InstanceID string `json:"instanceId" env:"FORWARD_INSTANCE_ID"`
 
@@ -129,6 +133,7 @@ func LoadConfig() *Config {
 			DefaultNetworkID:  getEnv("FORWARD_DEFAULT_NETWORK_ID", ""),
 			DefaultSnapshotID: getEnv("FORWARD_DEFAULT_SNAPSHOT_ID", ""),
 			DefaultQueryLimit: getEnvAsInt("FORWARD_DEFAULT_QUERY_LIMIT", 10000),
+			CertifiedLibraryPath: getEnv("FORWARD_CERTIFIED_LIBRARY_PATH", "spec/certified"),
 			SemanticCache: SemanticCacheConfig{
 				Enabled:             getEnvAsBool("FORWARD_SEMANTIC_CACHE_ENABLED", true),
 				MaxEntries:          getEnvAsInt("FORWARD_SEMANTIC_CACHE_MAX_ENTRIES", 1000),

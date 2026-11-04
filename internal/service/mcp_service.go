@@ -133,6 +133,9 @@ func (wm *WorkflowManager) Close() {
 // ForwardMCPService implements Forward Networks MCP tools using mcp-golang
 type ForwardMCPService struct {
 	forwardClient     forward.ClientInterface
+	embeddingService  EmbeddingService
+	certified         *usecases.CertifiedQueries
+	certifiedErr      error
 	config            *config.Config
 	logger            *logger.Logger
 	instanceID        string // Unique identifier for this Forward Networks instance
@@ -226,10 +229,11 @@ func NewForwardMCPService(cfg *config.Config, logger *logger.Logger) *ForwardMCP
 	ctx, cancelFunc := context.WithCancel(context.Background())
 
 	service := &ForwardMCPService{
-		forwardClient: forwardClient,
-		config:        cfg,
-		logger:        logger,
-		instanceID:    instanceID,
+		forwardClient:    forwardClient,
+		embeddingService: embeddingService,
+		config:           cfg,
+		logger:           logger,
+		instanceID:       instanceID,
 		defaults: &ServiceDefaults{
 			NetworkID:  cfg.Forward.DefaultNetworkID,
 			SnapshotID: cfg.Forward.DefaultSnapshotID,
@@ -246,6 +250,9 @@ func NewForwardMCPService(cfg *config.Config, logger *logger.Logger) *ForwardMCP
 		ctx:               ctx,
 		cancelFunc:        cancelFunc,
 	}
+
+	// Certified NQE library (M1a). Non-fatal if missing; tools report why.
+	service.initCertified(cfg.Forward.CertifiedLibraryPath)
 
 	// Set up database callback to automatically refresh query index when database is updated
 	if database != nil && queryIndex != nil {
@@ -773,6 +780,9 @@ func (s *ForwardMCPService) RegisterToolsWith(r *mcpadapter.Registrar) error {
 	addTool(r, "get_bloom_filter_stats",
 		"Get statistics and performance metrics for all bloom filters",
 		s.getBloomFilterStats)
+
+	// Certified NQE library tools (M1a)
+	s.registerCertifiedTools(r)
 
 	return r.Err()
 }
@@ -1399,21 +1409,36 @@ func (s *ForwardMCPService) searchPathsBulk(args SearchPathsBulkArgs) (*mcp.Call
 	networkID := s.getNetworkID(args.NetworkID)
 	snapshotID := s.getSnapshotID(args.SnapshotID)
 
-	// Note: snapshotId is optional for bulk API - if omitted, the network's latest processed Snapshot is used
-	// We only fetch it if explicitly requested
-	if snapshotID == "latest" {
+	// snapshotId is optional for the bulk API (it defaults to the latest
+	// processed snapshot), but every answer must cite a concrete snapshot id
+	// (spec non-negotiable #3), so resolve "latest" and "" up front. When the
+	// caller omitted it, the resolved id is used for the evidence line only:
+	// the API call still lets Forward pick the latest snapshot as before.
+	resolvedForEvidence := snapshotID
+	if snapshotID == "latest" || snapshotID == "" {
+		explicit := snapshotID == "latest"
 		s.logger.Info("searchPathsBulk - Latest snapshot requested, fetching for network %s", networkID)
 		snapshot, err := s.forwardClient.GetLatestSnapshot(networkID)
-		if err != nil {
+		switch {
+		case err != nil && explicit:
 			s.logger.Error("Failed to fetch latest snapshot for network %s: %v", networkID, err)
 			return nil, fmt.Errorf("failed to get latest snapshot for network %s: %w", networkID, err)
-		}
-		if snapshot != nil && snapshot.ID != "" {
-			snapshotID = snapshot.ID
-			s.logger.Info("searchPathsBulk - Using latest snapshot ID: %s", snapshotID)
-		} else {
+		case err != nil:
+			// Caller omitted the snapshot: keep 3.0.0 behaviour (Forward picks
+			// latest) and cite "latest-unresolved" so the gap is visible.
+			s.logger.Warn("Could not resolve latest snapshot for evidence on network %s: %v", networkID, err)
+			resolvedForEvidence = "latest-unresolved"
+		case snapshot != nil && snapshot.ID != "":
+			resolvedForEvidence = snapshot.ID
+			if explicit {
+				snapshotID = snapshot.ID
+			}
+			s.logger.Info("searchPathsBulk - Using latest snapshot ID: %s", resolvedForEvidence)
+		case explicit:
 			s.logger.Warn("No valid snapshot found for network %s", networkID)
 			return nil, fmt.Errorf("no valid snapshot found for network %s - ensure the network has been processed", networkID)
+		default:
+			resolvedForEvidence = "latest-unresolved"
 		}
 	}
 
@@ -1579,8 +1604,19 @@ func (s *ForwardMCPService) searchPathsBulk(args SearchPathsBulkArgs) (*mcp.Call
 
 	result := MarshalCompactJSONString(responses)
 
-	return newToolResponse(newTextContent(fmt.Sprintf("Bulk path search completed. %d/%d queries successful, found %d total paths:%s\n%s",
-		successfulQueries, len(args.Queries), totalPaths, debugInfo, result))), nil
+	// Evidence envelope per query (1a.7): one line each so an agent can cite
+	// the exact path search and snapshot behind every reachability claim.
+	evidence := ""
+	for _, q := range args.Queries {
+		src := q.SrcIP
+		if src == "" {
+			src = q.From
+		}
+		evidence += evidenceLine(usecases.PathSearchEvidence(src, q.DstIP, resolvedForEvidence))
+	}
+
+	return newToolResponse(newTextContent(fmt.Sprintf("Bulk path search completed. %d/%d queries successful, found %d total paths:%s\n%s\n%s",
+		successfulQueries, len(args.Queries), totalPaths, debugInfo, result, evidence))), nil
 }
 
 // Helper function to convert service NQEQueryOptions to forward NQEQueryOptions
@@ -1737,6 +1773,7 @@ func (s *ForwardMCPService) runNQEQueryByID(args RunNQEQueryByIDArgs) (*mcp.Call
 			response += fmt.Sprintf("Stored in memory system as entity: %s\n", entityID)
 			response += "You can use get_nqe_result_summary to analyze this result locally.\n"
 		}
+		response += evidenceLine(usecases.AdhocNQEEvidence(args.QueryID, lastResult.SnapshotID))
 		return newToolResponse(newTextContent(response)), nil
 	}
 
@@ -1760,7 +1797,8 @@ func (s *ForwardMCPService) runNQEQueryByID(args RunNQEQueryByIDArgs) (*mcp.Call
 	if s.config.Forward.SemanticCache.Enabled && s.semanticCache != nil {
 		if cachedResult, found := s.semanticCache.Get(cacheKey, networkID, snapshotID); found {
 			s.logger.Debug("Cache hit for NQE query %s", args.QueryID)
-			return newToolResponse(newTextContent(MarshalCompactJSONString(cachedResult))), nil
+			return newToolResponse(newTextContent(MarshalCompactJSONString(cachedResult) +
+				evidenceLine(usecases.AdhocNQEEvidence(args.QueryID, cachedResult.SnapshotID)))), nil
 		}
 	}
 
@@ -1868,7 +1906,9 @@ func (s *ForwardMCPService) runNQEQueryByID(args RunNQEQueryByIDArgs) (*mcp.Call
 	resultJSON := MarshalCompactJSONString(result)
 	s.logger.Debug("NQE query completed with %d items", len(result.Items))
 
-	response := fmt.Sprintf("NQE query completed. Found %d items:\n%s\n\n", len(result.Items), resultJSON)
+	response := fmt.Sprintf("NQE query completed. Found %d items:\n%s\n", len(result.Items), resultJSON)
+	// Ad-hoc library runs are uncertified (1a.6); cite the snapshot Forward reports.
+	response += evidenceLine(usecases.AdhocNQEEvidence(args.QueryID, result.SnapshotID)) + "\n"
 
 	// Pagination warning if results may be truncated
 	if params.Options != nil && len(result.Items) == params.Options.Limit {

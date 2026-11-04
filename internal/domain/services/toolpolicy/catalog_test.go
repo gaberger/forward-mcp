@@ -48,9 +48,9 @@ func TestDefaultCatalogIsWellFormed(t *testing.T) {
 			writes++
 		}
 	}
-	// 3.0.0 ships 54 tools; 3.1.0 adds 4 propose tools.
-	if got := reads + proposes + writes; got != 58 {
-		t.Errorf("expected 58 catalogued tools, got %d", got)
+	// 3.0.0 ships 54 tools; 3.1.0 adds 3 certified-library tools and 4 propose tools.
+	if got := reads + proposes + writes; got != 61 {
+		t.Errorf("expected 61 catalogued tools, got %d", got)
 	}
 	if proposes != 4 {
 		t.Errorf("expected 4 propose tools, got %d", proposes)

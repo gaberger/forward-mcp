@@ -171,6 +171,11 @@ var DefaultCatalog = MustCatalog([]entities.ToolSpec{
 	read("search_bloom_filter", loc),
 	read("get_bloom_filter_stats", loc),
 
+	// --- Certified NQE library (M1a) ---
+	read("search_certified_queries", loc),
+	read("check_answerable", loc),
+	read("run_certified_query", fwd),
+
 	// --- Predict (M1b; propose class, registered only behind the flag) ---
 	propose("predict_create_change_set"),
 	propose("predict_stage_edits"),

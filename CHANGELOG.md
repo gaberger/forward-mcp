@@ -106,7 +106,9 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - `spec/certified/`: versioned library (`VERSION`, `queries/<id>.json`, `fixtures/`) with three seed entries
   - `domain/entities.CertifiedQuery` / `Evidence`; `domain/services/certified` validation rules (every problem reported with file and field; `certified:true` requires owner, fixture and output schema)
   - `adapters/certifiedfs` loads any `fs.FS`; golden test proves the checked-in library always loads
-  - Search, answerability and run tools follow in M1a.3–1a.5
+  - Tools `search_certified_queries`, `check_answerable`, `run_certified_query` (read class) backed by `usecases.CertifiedQueries`; ranking reuses the configured embedding provider plus verbatim synonym boosts; parameters validated against the entry; output shape drift reported as warnings (M1a.3–1a.5)
+  - Evidence envelope on every query result: certified runs return `evidence {kind, ref, snapshot_id, library_version, certified}`; `run_nqe_query_by_id` and `search_paths*` append an `Evidence:` line with `certified:false` and the snapshot id (M1a.6–1a.7)
+  - New env `FORWARD_CERTIFIED_LIBRARY_PATH` (default `spec/certified`); see `docs/certified-library.md`
 - **Predict HTTP contract**: `docs/predict-endpoints.md`, generated from the Forward Python SDK's unpublished OpenAPI by `scripts/gen-predict-endpoints`, with round-trip, wait and verdict semantics (netorch 1b.0)
 - **Instance Lock Protection**: Prevent multiple MCP server instances from running simultaneously
   - File-based locking mechanism using PID validation

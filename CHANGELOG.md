@@ -96,6 +96,12 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
 ## [Unreleased]
 
 ### Added
+- **Tool classes and serve-mode policy** (netorch M1.0, see `PLAN.md`)
+  - Every tool is classified `read`, `propose` or `write` in `internal/domain/services/toolpolicy.DefaultCatalog`; registering an uncatalogued tool fails at startup
+  - `ServeModeStdio` exposes all classes (unchanged 3.0.0 behaviour); `ServeModeRemote` exposes only `read` tools, adds `propose` tools when enabled, and can never expose `write` tools
+  - Propose-class calls require the caller to hold the `predict` scope and are audit-logged as `AUDIT {...}` JSON lines with identifiers only (secrets redacted)
+  - Tool registration now goes through `internal/adapters/mcp.Registrar`; `ForwardMCPService.RegisterToolsWith` accepts any registrar, `RegisterTools` keeps the stdio behaviour
+  - New hex-architecture packages per ADR-001: `domain/entities` (ToolClass, Caller, AuditEvent), `ports` (ToolRegistry, ToolPolicy, AuditLogger, IdentityVerifier), `usecases` (ToolExposure), `adapters/mcp`, `adapters/auditlog`
 - **Instance Lock Protection**: Prevent multiple MCP server instances from running simultaneously
   - File-based locking mechanism using PID validation
   - Automatic stale lock detection and cleanup

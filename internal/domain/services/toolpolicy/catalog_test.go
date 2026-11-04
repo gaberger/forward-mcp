@@ -49,11 +49,11 @@ func TestDefaultCatalogIsWellFormed(t *testing.T) {
 		}
 	}
 	// 3.0.0 ships 54 tools; 3.1.0 adds 3 certified-library tools, 4 propose tools and predict_gc.
-	if got := reads + proposes + writes; got != 62 {
-		t.Errorf("expected 62 catalogued tools, got %d", got)
+	if got := reads + proposes + writes; got != 63 {
+		t.Errorf("expected 63 catalogued tools, got %d", got)
 	}
-	if proposes != 4 {
-		t.Errorf("expected 4 propose tools, got %d", proposes)
+	if proposes != 5 {
+		t.Errorf("expected 5 propose tools, got %d", proposes)
 	}
 }
 

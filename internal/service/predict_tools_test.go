@@ -17,7 +17,7 @@ func TestPredictToolsFollowProposePolicy(t *testing.T) {
 	}
 	r = registerWithMode(t, entities.ServeModeRemote, true)
 	names = joinNames(r.Registered())
-	for _, n := range []string{"predict_create_change_set", "predict_stage_edits", "predict_run_and_wait", "predict_get_results"} {
+	for _, n := range []string{"predict_create_change_set", "predict_stage_edits", "predict_run_and_wait", "predict_get_results", "predict_find_change_set"} {
 		if !contains(names, " "+n+" ") {
 			t.Errorf("%s must be registered with the propose flag", n)
 		}

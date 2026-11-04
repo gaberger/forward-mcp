@@ -77,6 +77,12 @@ type PredictGetResultsArgs struct {
 	ConnectivityTimeoutSeconds int    `json:"connectivity_timeout_seconds,omitempty" jsonschema:"How long to wait for the connectivity comparison to finish (default 300)"`
 }
 
+// PredictFindChangeSetArgs are the arguments for predict_find_change_set.
+type PredictFindChangeSetArgs struct {
+	NetworkID   string `json:"network_id" jsonschema:"Network to search"`
+	Description string `json:"description" jsonschema:"Text the change set description must contain (e.g. a workflow idempotency key)"`
+}
+
 // PredictGCArgs are the arguments for predict_gc.
 type PredictGCArgs struct {
 	NetworkID string `json:"network_id" jsonschema:"Network whose netorch-created change sets to delete"`
@@ -142,6 +148,23 @@ func (s *ForwardMCPService) predictGetResults(ctx context.Context, args PredictG
 	return jsonToolResponse(res)
 }
 
+func (s *ForwardMCPService) predictFindChangeSet(ctx context.Context, args PredictFindChangeSetArgs) (*mcp.CallToolResult, error) {
+	s.logToolCall("predict_find_change_set", args, nil)
+	uc, err := s.predictReady()
+	if err != nil {
+		return nil, err
+	}
+	networkID := s.getNetworkID(args.NetworkID)
+	if err := s.validateNetworkID(networkID); err != nil {
+		return nil, err
+	}
+	found, err := uc.FindByDescription(ctx, ports.CallerFromContext(ctx), networkID, args.Description)
+	if err != nil {
+		return nil, err
+	}
+	return jsonToolResponse(map[string]any{"change_sets": found, "count": len(found)})
+}
+
 func (s *ForwardMCPService) predictGC(ctx context.Context, args PredictGCArgs) (*mcp.CallToolResult, error) {
 	s.logToolCall("predict_gc", args, nil)
 	uc, err := s.predictReady()
@@ -179,6 +202,10 @@ func (s *ForwardMCPService) registerPredictTools(r *mcpadapter.Registrar) {
 			"counts, routing loops, changed checks, and a verdict PASS / FAIL / UNKNOWN with reasons. UNKNOWN means "+
 			"the comparison was incomplete or compared nothing; it is never an approval.",
 		s.predictGetResults)
+	mcpadapter.AddTool(r, "predict_find_change_set",
+		"🧪 **PREDICT (propose)**: Find your own change sets on a network by description text — use it to resume "+
+			"after an interruption instead of creating a duplicate (put an idempotency key in the description).",
+		s.predictFindChangeSet)
 	mcpadapter.AddTool(r, "predict_gc",
 		"Delete change sets this server created on a network (tagged netorch:*). Also deletes their predicted snapshots.",
 		s.predictGC)

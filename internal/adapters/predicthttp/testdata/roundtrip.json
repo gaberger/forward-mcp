@@ -206,7 +206,7 @@
       "content_type": "",
       "request_body": "",
       "status": 200,
-      "body": "[{\"id\": \"CHG-101\", \"name\": \"netorch agent-a\", \"networkId\": \"115\", \"snapshotId\": \"656\", \"tags\": [\"netorch:agent-a\", \"netorch:run:old\"]}, {\"id\": \"CHG-7\", \"name\": \"someone else's\", \"networkId\": \"115\", \"snapshotId\": \"656\", \"tags\": []}]"
+      "body": "[{\"id\": \"CHG-101\", \"name\": \"netorch agent-a\", \"networkId\": \"115\", \"snapshotId\": \"656\", \"tags\": [\"netorch:agent-a\", \"netorch:run:old\"], \"description\": \"shut Ethernet1\"}, {\"id\": \"CHG-7\", \"name\": \"someone else's\", \"networkId\": \"115\", \"snapshotId\": \"656\", \"tags\": []}]"
     },
     {
       "method": "DELETE",

@@ -136,6 +136,7 @@ type ForwardMCPService struct {
 	embeddingService  EmbeddingService
 	certified         *usecases.CertifiedQueries
 	certifiedErr      error
+	predict           *usecases.PredictChanges
 	config            *config.Config
 	logger            *logger.Logger
 	instanceID        string // Unique identifier for this Forward Networks instance
@@ -261,6 +262,8 @@ func NewForwardMCPService(cfg *config.Config, logger *logger.Logger) *ForwardMCP
 
 	// Certified NQE library (M1a). Non-fatal if missing; tools report why.
 	service.initCertified(cfg.Forward.CertifiedLibraryPath)
+	// Forward Predict (M1b). Registered only when the policy allows propose tools.
+	service.initPredict()
 
 	// Set up database callback to automatically refresh query index when database is updated
 	if database != nil && queryIndex != nil {
@@ -791,6 +794,9 @@ func (s *ForwardMCPService) RegisterToolsWith(r *mcpadapter.Registrar) error {
 
 	// Certified NQE library tools (M1a)
 	s.registerCertifiedTools(r)
+
+	// Forward Predict tools (M1b; propose class)
+	s.registerPredictTools(r)
 
 	return r.Err()
 }

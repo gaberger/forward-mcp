@@ -36,6 +36,10 @@ type RemoteConfig struct {
 	// Stateless disables MCP session tracking (for load balancers without
 	// sticky sessions).
 	Stateless bool `json:"stateless" env:"FORWARD_REMOTE_STATELESS"`
+	// RateLimitPerMinute bounds tool calls per caller subject (0 = off).
+	RateLimitPerMinute int `json:"rateLimitPerMinute" env:"FORWARD_REMOTE_RATE_LIMIT_PER_MIN"`
+	// RateLimitBurst is the burst allowance per subject (default = per-minute).
+	RateLimitBurst int `json:"rateLimitBurst" env:"FORWARD_REMOTE_RATE_LIMIT_BURST"`
 }
 
 // ServerConfig holds server-specific configuration
@@ -148,6 +152,8 @@ func LoadConfig() *Config {
 			StaticTokens:       getEnv("FORWARD_REMOTE_STATIC_TOKENS", ""),
 			AllowAnonymous:     getEnvAsBool("FORWARD_REMOTE_ALLOW_ANONYMOUS", false),
 			Stateless:          getEnvAsBool("FORWARD_REMOTE_STATELESS", false),
+			RateLimitPerMinute: getEnvAsInt("FORWARD_REMOTE_RATE_LIMIT_PER_MIN", 600),
+			RateLimitBurst:     getEnvAsInt("FORWARD_REMOTE_RATE_LIMIT_BURST", 60),
 		},
 		Forward: ForwardConfig{
 			APIKey:               getEnv("FORWARD_API_KEY", ""),

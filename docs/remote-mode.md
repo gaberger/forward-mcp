@@ -48,7 +48,16 @@ tool denied by policy → MCP tool error with the reason.
 | `jwt` | arrives in M1c.1 (issuer, audience, exp, alg allowlist, JWKS or static key) | production |
 
 Scopes in use: `predict` (required for propose tools). Network ids on a
-caller, when present, restrict which networks it may query (enforced in M1c.5).
+caller, when present, restrict which networks it may touch: a Forward-bound
+tool that takes `network_id` is denied for any other network, and the caller
+must name one (the process-wide default network is not theirs). Tools without
+a network parameter are exempt.
+
+Each subject is rate-limited (token bucket, `FORWARD_REMOTE_RATE_LIMIT_PER_MIN`,
+default 600, burst `FORWARD_REMOTE_RATE_LIMIT_BURST`, default 60); over the
+limit, calls return a tool error naming the limit. All log output passes
+through `domain/services/redact`, so bearer tokens, API keys and `key=value`
+secrets never reach stderr or the JSON log file.
 
 ## Isolation
 
@@ -98,4 +107,5 @@ spec:
 |---|---|---|
 | `SERVER_HOST` / `SERVER_PORT` | `0.0.0.0` / `8080` | listen address (or `--addr`) |
 | `FORWARD_REMOTE_STATELESS` | `false` | disable MCP session tracking (load balancers without sticky sessions) |
+| `FORWARD_REMOTE_RATE_LIMIT_PER_MIN` / `_BURST` | `600` / `60` | per-subject rate limit (0 disables) |
 | `FORWARD_CERTIFIED_LIBRARY_PATH` | `spec/certified` | certified NQE library directory |

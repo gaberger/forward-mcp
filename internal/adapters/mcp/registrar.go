@@ -9,7 +9,9 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"reflect"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -27,6 +29,7 @@ type Registrar struct {
 	server   *mcp.Server
 	exposure *usecases.ToolExposure
 	audit    ports.AuditLogger
+	limiter  ports.RateLimiter // optional; nil = unlimited
 
 	mu         sync.Mutex
 	registered []string
@@ -38,6 +41,13 @@ type Registrar struct {
 // calls are then not audited, which the policy only permits in stdio.
 func NewRegistrar(server *mcp.Server, exposure *usecases.ToolExposure, audit ports.AuditLogger) *Registrar {
 	return &Registrar{server: server, exposure: exposure, audit: audit}
+}
+
+// WithRateLimiter bounds calls per caller subject. Denied calls return a
+// tool error naming the limit; propose calls are audited as denied.
+func (r *Registrar) WithRateLimiter(l ports.RateLimiter) *Registrar {
+	r.limiter = l
+	return r
 }
 
 // Server exposes the underlying SDK server for prompts and resources, which
@@ -92,6 +102,7 @@ func AddTool[In any](r *Registrar, name, description string, h Handler[In]) {
 
 	policy := r.exposure.Policy
 	audit := r.audit
+	limiter := r.limiter
 
 	mcp.AddTool(r.server, &mcp.Tool{
 		Name:        name,
@@ -99,11 +110,20 @@ func AddTool[In any](r *Registrar, name, description string, h Handler[In]) {
 		Annotations: annotationsFor(spec),
 	}, func(ctx context.Context, req *mcp.CallToolRequest, in In) (*mcp.CallToolResult, any, error) {
 		ctx, caller := callerFor(ctx, req)
-		if ok, reason := policy.AllowsCall(spec, caller); !ok {
+		deny := func(reason string) (*mcp.CallToolResult, any, error) {
 			if spec.Class == entities.ToolClassPropose && audit != nil {
 				audit.LogProposeCall(ctx, auditEvent(spec, caller, in, entities.AuditOutcomeDenied, reason, 0))
 			}
 			return nil, nil, errors.New(reason)
+		}
+		if ok, reason := policy.AllowsCall(spec, caller); !ok {
+			return deny(reason)
+		}
+		if reason := networkDenial(spec, caller, in); reason != "" {
+			return deny(reason)
+		}
+		if limiter != nil && caller.Subject != entities.LocalSubject && !limiter.Allow(caller.Subject) {
+			return deny(fmt.Sprintf("rate limit exceeded for caller %q; retry shortly", caller.Subject))
 		}
 		if spec.Class != entities.ToolClassPropose {
 			res, err := h(ctx, in)
@@ -134,6 +154,47 @@ func AddToolLegacy[In any](r *Registrar, name, description string, h func(In) (*
 	AddTool(r, name, description, func(_ context.Context, in In) (*mcp.CallToolResult, error) {
 		return h(in)
 	})
+}
+
+// networkDenial enforces the caller's network allow-list (PLAN.md 1c.5).
+// A restricted caller must name a network on tools that take one, because
+// the process-wide default network is not theirs to use.
+func networkDenial(spec entities.ToolSpec, caller entities.Caller, in any) string {
+	if len(caller.NetworkIDs) == 0 || spec.Target != entities.ToolTargetForward {
+		return ""
+	}
+	fields, hasField := networkField(in)
+	if !hasField {
+		return ""
+	}
+	if fields == "" {
+		return fmt.Sprintf("network_id is required: caller %q is restricted to networks %v", caller.Subject, caller.NetworkIDs)
+	}
+	if !caller.MayAccessNetwork(fields) {
+		return fmt.Sprintf("caller %q is not authorised for network %s (allowed: %v)", caller.Subject, fields, caller.NetworkIDs)
+	}
+	return ""
+}
+
+// networkField returns the input's network_id and whether the input type
+// declares one at all (so tools without a network parameter are exempt).
+func networkField(in any) (string, bool) {
+	b, err := json.Marshal(in)
+	if err != nil {
+		return "", false
+	}
+	var m map[string]json.RawMessage
+	if err := json.Unmarshal(b, &m); err != nil {
+		return "", false
+	}
+	raw, ok := m["network_id"]
+	if !ok {
+		// omitempty drops empty strings; detect the field via the type.
+		return "", hasNetworkIDField(in)
+	}
+	var v string
+	_ = json.Unmarshal(raw, &v)
+	return v, true
 }
 
 // auditEvent builds the audit record, pulling only identifier fields out of
@@ -196,4 +257,23 @@ func firstText(res *mcp.CallToolResult) string {
 // Summary is a one-line description of what was exposed, for startup logs.
 func (r *Registrar) Summary() string {
 	return fmt.Sprintf("mode=%s registered=%d skipped=%d", r.exposure.Policy.Mode(), len(r.Registered()), len(r.Skipped()))
+}
+
+// hasNetworkIDField reports whether in's struct type has a json field
+// named network_id, via reflection, for the omitempty case.
+func hasNetworkIDField(in any) bool {
+	t := reflect.TypeOf(in)
+	for t != nil && t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	if t == nil || t.Kind() != reflect.Struct {
+		return false
+	}
+	for i := 0; i < t.NumField(); i++ {
+		tag := t.Field(i).Tag.Get("json")
+		if name, _, _ := strings.Cut(tag, ","); name == "network_id" {
+			return true
+		}
+	}
+	return false
 }

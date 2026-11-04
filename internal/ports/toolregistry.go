@@ -26,3 +26,8 @@ type ToolPolicy interface {
 	// to tools that were registered.
 	AllowsCall(spec entities.ToolSpec, caller entities.Caller) (bool, string)
 }
+
+// RateLimiter bounds calls per key (the caller subject in remote mode).
+type RateLimiter interface {
+	Allow(key string) bool
+}

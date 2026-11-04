@@ -14,6 +14,7 @@ import (
 	"github.com/forward-mcp/internal/adapters/identity/static"
 	mcpadapter "github.com/forward-mcp/internal/adapters/mcp"
 	"github.com/forward-mcp/internal/domain/entities"
+	"github.com/forward-mcp/internal/domain/services/ratelimit"
 	"github.com/forward-mcp/internal/domain/services/toolpolicy"
 	"github.com/forward-mcp/internal/ports"
 	"github.com/forward-mcp/internal/usecases"
@@ -38,17 +39,21 @@ func newTestServer(t *testing.T, propose bool) (*httptest.Server, *captureSink) 
 		{Name: "whoami", Class: entities.ToolClassRead, Target: entities.ToolTargetLocal},
 		{Name: "predict_create_change_set", Class: entities.ToolClassPropose, Target: entities.ToolTargetForward},
 		{Name: "delete_snapshot", Class: entities.ToolClassWrite, Target: entities.ToolTargetForward},
+		{Name: "list_devices", Class: entities.ToolClassRead, Target: entities.ToolTargetForward},
 	})
 	exposure := &usecases.ToolExposure{Registry: catalog, Policy: toolpolicy.Remote(propose)}
 	sink := &captureSink{}
 	srv := mcp.NewServer(&mcp.Implementation{Name: "test", Version: "0"}, nil)
-	r := mcpadapter.NewRegistrar(srv, exposure, auditlog.New(sink))
+	r := mcpadapter.NewRegistrar(srv, exposure, auditlog.New(sink)).WithRateLimiter(ratelimit.New(6000, 20))
 	mcpadapter.AddTool(r, "whoami", "who am I", func(ctx context.Context, _ whoArgs) (*mcp.CallToolResult, error) {
 		c := ports.CallerFromContext(ctx)
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: c.Subject + "|" + strings.Join(c.Scopes, ",")}}}, nil
 	})
 	mcpadapter.AddTool(r, "predict_create_change_set", "propose", func(_ context.Context, a echoArgs) (*mcp.CallToolResult, error) {
 		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "cs-for-" + a.NetworkID}}}, nil
+	})
+	mcpadapter.AddTool(r, "list_devices", "read, network-bound", func(_ context.Context, a echoArgs) (*mcp.CallToolResult, error) {
+		return &mcp.CallToolResult{Content: []mcp.Content{&mcp.TextContent{Text: "devices-of-" + a.NetworkID}}}, nil
 	})
 	mcpadapter.AddTool(r, "delete_snapshot", "write", func(context.Context, echoArgs) (*mcp.CallToolResult, error) {
 		t.Fatal("write tool handler must never run in remote mode")
@@ -58,7 +63,7 @@ func newTestServer(t *testing.T, propose bool) (*httptest.Server, *captureSink) 
 		t.Fatal(err)
 	}
 
-	verifier, err := static.Parse("agent-token-0123456789=agent-a:predict,plain-token-0123456789=agent-b")
+	verifier, err := static.Parse("agent-token-0123456789=agent-a:predict,plain-token-0123456789=agent-b,scoped-token-0123456789=agent-c:predict:162112")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -130,8 +135,8 @@ func TestRemoteListsOnlyReadToolsByDefault(t *testing.T) {
 	for _, tl := range tools.Tools {
 		names = append(names, tl.Name)
 	}
-	if strings.Join(names, ",") != "whoami" {
-		t.Errorf("expected only whoami, got %v", names)
+	if strings.Join(names, ",") != "list_devices,whoami" {
+		t.Errorf("expected only read tools, got %v", names)
 	}
 }
 
@@ -181,5 +186,51 @@ func TestNewRequiresVerifierUnlessAnonymous(t *testing.T) {
 	}
 	if _, err := New(srv, Options{Addr: "127.0.0.1:0", AllowAnonymous: true}); err != nil {
 		t.Errorf("anonymous lab mode should construct: %v", err)
+	}
+}
+
+func TestNetworkAllowListIsEnforced(t *testing.T) {
+	ts, _ := newTestServer(t, true)
+	c := connect(t, ts, "scoped-token-0123456789") // agent-c: networks 162112 only
+	call := func(args map[string]any) (*mcp.CallToolResult, error) {
+		return c.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_devices", Arguments: args})
+	}
+	if res, err := call(map[string]any{"network_id": "162112"}); err != nil || res.IsError {
+		t.Fatalf("allowed network must pass: %v %+v", err, res)
+	}
+	if res, err := call(map[string]any{"network_id": "999"}); err == nil && (res == nil || !res.IsError) {
+		t.Fatal("other network must be denied")
+	}
+	if res, err := call(map[string]any{}); err == nil && (res == nil || !res.IsError) {
+		t.Fatal("restricted caller must name a network (no process default)")
+	}
+	// Unrestricted caller may omit the network and use any network.
+	a := connect(t, ts, "agent-token-0123456789")
+	if res, err := a.CallTool(context.Background(), &mcp.CallToolParams{Name: "list_devices", Arguments: map[string]any{"network_id": "999"}}); err != nil || res.IsError {
+		t.Fatalf("unrestricted caller must pass: %v %+v", err, res)
+	}
+	// whoami has no network parameter: exempt even for restricted callers.
+	if res, err := c.CallTool(context.Background(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}}); err != nil || res.IsError {
+		t.Fatalf("tools without a network parameter are exempt: %v %+v", err, res)
+	}
+}
+
+func TestRateLimitPerSubject(t *testing.T) {
+	ts, _ := newTestServer(t, false)
+	b := connect(t, ts, "plain-token-0123456789")
+	limited := 0
+	for i := 0; i < 40; i++ {
+		res, err := b.CallTool(context.Background(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}})
+		if err != nil || (res != nil && res.IsError) {
+			limited++
+		}
+	}
+	if limited == 0 {
+		t.Fatal("expected the burst of 20 to be exceeded")
+	}
+	// Another subject is unaffected.
+	a := connect(t, ts, "agent-token-0123456789")
+	if res, err := a.CallTool(context.Background(), &mcp.CallToolParams{Name: "whoami", Arguments: map[string]any{}}); err != nil || res.IsError {
+		t.Fatalf("other subject must not be limited: %v %+v", err, res)
 	}
 }

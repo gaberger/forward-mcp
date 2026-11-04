@@ -120,6 +120,10 @@ Output: 🌺 Multi-term bloom query: 2/5 blocks match, 40% faster filtering
   - Memory graph, API tracker and bloom filters/indexes use the caller's partition id (`<instance>-<sha256(subject)[:16]>`) in place of the instance id; `MemorySystem.ForInstance` views share one SQLite handle
   - Tool handlers run on a caller-scoped service view (`forCaller`), registered as method expressions, so no handler needed rewriting; stdio keeps the unpartitioned service and its existing data
   - `isolation_test.go`: cross-identity read/match/delete attempts on cache, memory graph and bloom filters all fail
+- **Network allow-list, rate limit, log redaction** (netorch M1c.5–1c.7)
+  - A caller with network ids is denied Forward-bound tools for other networks and must name a network explicitly
+  - Per-subject token-bucket rate limit (`FORWARD_REMOTE_RATE_LIMIT_PER_MIN`, `_BURST`)
+  - Every logger line, tool-call argument dump and error passes through `domain/services/redact` (JWTs, bearer/basic values, `key=value` secrets)
 - **Predict HTTP contract**: `docs/predict-endpoints.md`, generated from the Forward Python SDK's unpublished OpenAPI by `scripts/gen-predict-endpoints`, with round-trip, wait and verdict semantics (netorch 1b.0)
 - **Instance Lock Protection**: Prevent multiple MCP server instances from running simultaneously
   - File-based locking mechanism using PID validation
